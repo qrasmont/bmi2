@@ -9,11 +9,11 @@ This is an [embedded-hal](https://github.com/rust-embedded/embedded-hal) driver 
 ```rust
 // ...
 
-/// Create a new Bmi270 device using I2C with its alternative address (0x69).
+/// Create a new Bmi2 device using I2C with its alternative address (0x69).
 /// Configure the max data burst to 255 bytes:
 /// - used for the upload of the configuration during initialization.
 /// - This is a limitation from your device or its HAL. 
-let mut bmi = Bmi270::new_i2c(i2c, I2cAddr::Alternative, Burst::Other(255));
+let mut bmi = Bmi2::new_i2c(i2c, I2cAddr::Alternative, Burst::Other(255));
 
 /// Get the chip id. Should be 0x24 or 36 in decimal
 let chip_id = bmi.get_chip_id().unwrap();

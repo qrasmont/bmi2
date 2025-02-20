@@ -10,5 +10,5 @@ pub mod interface;
 pub use interface::I2cAddr;
 pub mod types;
 
-pub mod bmi270;
-pub use bmi270::Bmi270;
+pub mod bmi2;
+pub use bmi2::Bmi2;

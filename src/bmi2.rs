@@ -11,15 +11,15 @@ use crate::types::{
     Saturation, Status, WristGestureActivity, FIFO_LENGTH_1_MASK,
 };
 
-pub struct Bmi270<I> {
+pub struct Bmi2<I> {
     iface: I,
     max_burst: u16,
 }
 
-impl<I2C> Bmi270<I2cInterface<I2C>> {
+impl<I2C> Bmi2<I2cInterface<I2C>> {
     /// Create a new Bmi270 device with I2C communication.
     pub fn new_i2c(i2c: I2C, address: I2cAddr, burst: Burst) -> Self {
-        Bmi270 {
+        Bmi2 {
             iface: I2cInterface {
                 i2c,
                 address: address.addr(),
@@ -34,10 +34,10 @@ impl<I2C> Bmi270<I2cInterface<I2C>> {
     }
 }
 
-impl<SPI> Bmi270<SpiInterface<SPI>> {
+impl<SPI> Bmi2<SpiInterface<SPI>> {
     /// Create a new Bmi270 device with SPI communication.
     pub fn new_spi(spi: SPI, burst: Burst) -> Self {
-        Bmi270 {
+        Bmi2 {
             iface: SpiInterface { spi },
             max_burst: burst.val(),
         }
@@ -49,7 +49,7 @@ impl<SPI> Bmi270<SpiInterface<SPI>> {
     }
 }
 
-impl<I, CommE> Bmi270<I>
+impl<I, CommE> Bmi2<I>
 where
     I: ReadData<Error = Error<CommE>> + WriteData<Error = Error<CommE>>,
 {
