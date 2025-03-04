@@ -9,6 +9,10 @@ This is an [embedded-hal](https://github.com/rust-embedded/embedded-hal) driver 
 ```rust
 // ...
 
+use bmi2::Bmi2;
+use bmi2::config;
+use bmi2::{types::Burst, I2cAddr, types::PwrCtrl};
+
 /// Create a new Bmi2 device using I2C with its alternative address (0x69).
 /// Configure the max data burst to 255 bytes:
 /// - used for the upload of the configuration during initialization.
