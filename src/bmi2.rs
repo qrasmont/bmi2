@@ -1,7 +1,10 @@
 use fixedvec::FixedVec;
 
-use crate::interface::{I2cAddr, I2cInterface, ReadData, SpiInterface, WriteData};
 use crate::registers::Registers;
+use crate::{
+    interface::{I2cInterface, ReadData, SpiInterface, WriteData},
+    interface_common::I2cAddr,
+};
 
 use crate::types::{
     AccConf, AccOffsets, AccRange, AccSelfTest, AuxConf, AuxData, AuxIfConf, AxisData, Burst, Cmd,
@@ -149,9 +152,7 @@ where
     }
 
     /// Get the detected wrist gesture and activity type.
-    pub fn get_wrist_gesture_activity(
-        &mut self,
-    ) -> Result<WristGestureActivity, Error<CommE>> {
+    pub fn get_wrist_gesture_activity(&mut self) -> Result<WristGestureActivity, Error<CommE>> {
         let wr_gest_acc = self.iface.read_reg(Registers::WR_GEST_ACT)?;
 
         Ok(WristGestureActivity::from_reg(wr_gest_acc))
@@ -426,10 +427,7 @@ where
     }
 
     /// Set interrupt 1 feature mapping.
-    pub fn set_int1_map_feat(
-        &mut self,
-        int1_map_feat: IntMapFeat,
-    ) -> Result<(), Error<CommE>> {
+    pub fn set_int1_map_feat(&mut self, int1_map_feat: IntMapFeat) -> Result<(), Error<CommE>> {
         let reg = int1_map_feat.to_reg();
         self.iface.write_reg(Registers::INT1_MAP_FEAT, reg)?;
         Ok(())
@@ -442,10 +440,7 @@ where
     }
 
     /// Set interrupt 2 feature mapping.
-    pub fn set_int2_map_feat(
-        &mut self,
-        int2_map_feat: IntMapFeat,
-    ) -> Result<(), Error<CommE>> {
+    pub fn set_int2_map_feat(&mut self, int2_map_feat: IntMapFeat) -> Result<(), Error<CommE>> {
         let reg = int2_map_feat.to_reg();
         self.iface.write_reg(Registers::INT2_MAP_FEAT, reg)?;
         Ok(())
@@ -581,10 +576,7 @@ where
     }
 
     /// Set the accelerometer self test configuration.
-    pub fn set_acc_self_test(
-        &mut self,
-        acc_self_test: AccSelfTest,
-    ) -> Result<(), Error<CommE>> {
+    pub fn set_acc_self_test(&mut self, acc_self_test: AccSelfTest) -> Result<(), Error<CommE>> {
         self.iface
             .write_reg(Registers::ACC_SELF_TEST, acc_self_test.to_reg())?;
         Ok(())
@@ -705,7 +697,6 @@ where
 
     /// Initialize sensor.
     pub fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {
-
         // Disable advanced power mode
         let mut pwr_conf = self.get_pwr_conf()?;
         pwr_conf.power_save = false;
