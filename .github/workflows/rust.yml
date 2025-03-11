@@ -20,3 +20,19 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  keep-in-sync:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that and async versions are in sync
+        run: |
+          set -exuo pipefail
+
+          cat src/interface_async.rs | sed -e 's/[.]await//' -e 's/async //' -e 's/_async//' | grep -vF '#[allow(async_fn_in_trait)]' | rustfmt > /tmp/stripped-interface_async.rs
+          diff -u /tmp/stripped-interface_async.rs src/interface.rs
+
+          cat src/bmi2_async.rs | sed -e 's/[.]await//' -e 's/async //' -e 's/_async//' | grep -vF '#[allow(async_fn_in_trait)]' | rustfmt > /tmp/stripped-bmi2_async.rs
+          diff -u /tmp/stripped-bmi2_async.rs src/bmi2.rs

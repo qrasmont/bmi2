@@ -1,0 +1,786 @@
+use fixedvec::FixedVec;
+
+use crate::registers::Registers;
+use crate::{
+    interface_async::{I2cInterface, ReadData, SpiInterface, WriteData},
+    interface_common::I2cAddr,
+};
+
+use crate::types::{
+    AccConf, AccOffsets, AccRange, AccSelfTest, AuxConf, AuxData, AuxIfConf, AxisData, Burst, Cmd,
+    Data, Drv, Error, ErrorReg, ErrorRegMsk, Event, FifoConf, FifoDowns, GyrConf, GyrCrtConf,
+    GyrOffsets, GyrRange, GyrSelfTest, IfConf, IntIoCtrl, IntLatch, IntMapData, IntMapFeat,
+    InternalError, InternalStatus, InterruptStatus, NvConf, PullUpConf, PwrConf, PwrCtrl,
+    Saturation, Status, WristGestureActivity, FIFO_LENGTH_1_MASK,
+};
+
+pub struct Bmi2<I> {
+    iface: I,
+    max_burst: u16,
+}
+
+impl<I2C> Bmi2<I2cInterface<I2C>> {
+    /// Create a new Bmi270 device with I2C communication.
+    pub fn new_i2c(i2c: I2C, address: I2cAddr, burst: Burst) -> Self {
+        Bmi2 {
+            iface: I2cInterface {
+                i2c,
+                address: address.addr(),
+            },
+            max_burst: burst.val(),
+        }
+    }
+
+    /// Release I2C.
+    pub fn release(self) -> I2C {
+        self.iface.i2c
+    }
+}
+
+impl<SPI> Bmi2<SpiInterface<SPI>> {
+    /// Create a new Bmi270 device with SPI communication.
+    pub fn new_spi(spi: SPI, burst: Burst) -> Self {
+        Bmi2 {
+            iface: SpiInterface { spi },
+            max_burst: burst.val(),
+        }
+    }
+
+    /// Release I2C and CS.
+    pub fn release(self) -> SPI {
+        self.iface.spi
+    }
+}
+
+impl<I, CommE> Bmi2<I>
+where
+    I: ReadData<Error = Error<CommE>> + WriteData<Error = Error<CommE>>,
+{
+    /// Get the chip id.
+    pub async fn get_chip_id(&mut self) -> Result<u8, Error<CommE>> {
+        self.iface.read_reg(Registers::CHIP_ID).await
+    }
+
+    /// Get the errors from the error register.
+    pub async fn get_errors(&mut self) -> Result<ErrorReg, Error<CommE>> {
+        let errors = self.iface.read_reg(Registers::ERR_REG).await?;
+
+        Ok(ErrorReg::from_reg(errors))
+    }
+
+    /// Get the sensor status.
+    pub async fn get_status(&mut self) -> Result<Status, Error<CommE>> {
+        let status = self.iface.read_reg(Registers::STATUS).await?;
+
+        Ok(Status::from_reg(status))
+    }
+
+    /// Get the sensor auxiliary data.
+    pub async fn get_aux_data(&mut self) -> Result<AuxData, Error<CommE>> {
+        let mut payload = [0_u8; 9];
+        payload[0] = Registers::AUX_DATA_0;
+        self.iface.read(&mut payload).await?;
+
+        Ok(AuxData {
+            axis: payload_to_axis(&payload[1..7]),
+            r: (i16::from(payload[7]) | (i16::from(payload[8]) << 8)),
+        })
+    }
+
+    /// Get the sensor accelerometer data.
+    pub async fn get_acc_data(&mut self) -> Result<AxisData, Error<CommE>> {
+        let mut payload = [0_u8; 7];
+        payload[0] = Registers::ACC_DATA_0;
+        self.iface.read(&mut payload).await?;
+
+        Ok(payload_to_axis(&payload[1..]))
+    }
+
+    /// Get the sensor gyroscope data.
+    pub async fn get_gyr_data(&mut self) -> Result<AxisData, Error<CommE>> {
+        let mut payload = [0_u8; 7];
+        payload[0] = Registers::GYR_DATA_0;
+        self.iface.read(&mut payload).await?;
+
+        Ok(payload_to_axis(&payload[1..]))
+    }
+
+    /// Get the sensor time.
+    pub async fn get_sensor_time(&mut self) -> Result<u32, Error<CommE>> {
+        let mut payload = [Registers::SENSORTIME_0, 0, 0, 0];
+        self.iface.read(&mut payload).await?;
+
+        Ok(payload_to_sensortime(&payload[1..]))
+    }
+
+    /// Get all the sensor data (excluding auxiliary data).
+    pub async fn get_data(&mut self) -> Result<Data, Error<CommE>> {
+        let mut payload = [0_u8; 16];
+        payload[0] = Registers::ACC_DATA_0;
+        self.iface.read(&mut payload).await?;
+
+        Ok(Data {
+            acc: payload_to_axis(&payload[1..7]),
+            gyr: payload_to_axis(&payload[7..13]),
+            time: payload_to_sensortime(&payload[13..16]),
+        })
+    }
+
+    /// Get the event register.
+    pub async fn get_event(&mut self) -> Result<Event, Error<CommE>> {
+        let event = self.iface.read_reg(Registers::EVENT).await?;
+
+        Ok(Event::from_reg(event))
+    }
+
+    /// Get the interrupt/feature status.
+    pub async fn get_int_status(&mut self) -> Result<InterruptStatus, Error<CommE>> {
+        let int_stat_0 = self.iface.read_reg(Registers::INT_STATUS_0).await?;
+        let int_stat_1 = self.iface.read_reg(Registers::INT_STATUS_1).await?;
+
+        Ok(InterruptStatus::from_regs(int_stat_0, int_stat_1))
+    }
+
+    /// Get the step count.
+    pub async fn get_step_count(&mut self) -> Result<u16, Error<CommE>> {
+        let mut payload = [Registers::SC_OUT_0, 0, 0];
+        self.iface.read(&mut payload).await?;
+
+        let steps: u16 = u16::from(payload[1]) | u16::from(payload[2]) << 8;
+
+        Ok(steps)
+    }
+
+    /// Get the detected wrist gesture and activity type.
+    pub async fn get_wrist_gesture_activity(
+        &mut self,
+    ) -> Result<WristGestureActivity, Error<CommE>> {
+        let wr_gest_acc = self.iface.read_reg(Registers::WR_GEST_ACT).await?;
+
+        Ok(WristGestureActivity::from_reg(wr_gest_acc))
+    }
+
+    /// Get the sensor internal status.
+    pub async fn get_internal_status(&mut self) -> Result<InternalStatus, Error<CommE>> {
+        let internal_status = self.iface.read_reg(Registers::INTERNAL_STATUS).await?;
+
+        Ok(InternalStatus::from_reg(internal_status))
+    }
+
+    /// Get the sensor temperature.
+    pub async fn get_temperature(&mut self) -> Result<Option<f32>, Error<CommE>> {
+        let mut payload = [Registers::TEMPERATURE_0, 0, 0];
+        self.iface.read(&mut payload).await?;
+        let raw_temp = u16::from(payload[1]) | u16::from(payload[2]) << 8;
+
+        Ok(match raw_temp {
+            0x8000 => None,
+            _ => Some(f32::from(raw_temp as i16) * (1.0_f32 / 512.0_f32) + 23.0),
+        })
+    }
+
+    /// Get the current fill level of the FIFO buffer.
+    pub async fn get_fifo_len(&mut self) -> Result<i16, Error<CommE>> {
+        let mut payload = [Registers::FIFO_LENGTH_0, 0, 0];
+        self.iface.read(&mut payload).await?;
+        let len = i16::from(payload[1]) | i16::from(payload[2] & FIFO_LENGTH_1_MASK) << 8;
+
+        Ok(len)
+    }
+
+    pub async fn get_fifo_data(&mut self) -> Result<(), Error<CommE>> {
+        // TODO Fifo is 6KB, will need the max read info from user + fifo config
+        Ok(())
+    }
+
+    /// Get the accelerometer configuration.
+    pub async fn get_acc_conf(&mut self) -> Result<AccConf, Error<CommE>> {
+        let acc_conf = self.iface.read_reg(Registers::ACC_CONF).await?;
+        Ok(AccConf::from_reg(acc_conf))
+    }
+
+    /// Set the accelerometer configuration.
+    pub async fn set_acc_conf(&mut self, acc_conf: AccConf) -> Result<(), Error<CommE>> {
+        let reg = acc_conf.to_reg();
+        self.iface.write_reg(Registers::ACC_CONF, reg).await?;
+        Ok(())
+    }
+
+    /// Get the accelerometer range.
+    pub async fn get_acc_range(&mut self) -> Result<AccRange, Error<CommE>> {
+        let acc_range = self.iface.read_reg(Registers::ACC_RANGE).await?;
+        Ok(AccRange::from_reg(acc_range))
+    }
+
+    /// Set the accelerometer range.
+    pub async fn set_acc_range(&mut self, acc_range: AccRange) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::ACC_RANGE, acc_range as u8)
+            .await?;
+        Ok(())
+    }
+
+    /// Get the gyroscope configuration.
+    pub async fn get_gyr_conf(&mut self) -> Result<GyrConf, Error<CommE>> {
+        let gyr_conf = self.iface.read_reg(Registers::GYR_CONF).await?;
+        Ok(GyrConf::from_reg(gyr_conf))
+    }
+
+    /// Set the gyroscope configuration.
+    pub async fn set_gyr_conf(&mut self, gyr_conf: GyrConf) -> Result<(), Error<CommE>> {
+        let reg = gyr_conf.to_reg();
+        self.iface.write_reg(Registers::GYR_CONF, reg).await?;
+        Ok(())
+    }
+
+    /// Get the gyroscope range.
+    pub async fn get_gyr_range(&mut self) -> Result<GyrRange, Error<CommE>> {
+        let gyr_range = self.iface.read_reg(Registers::GYR_RANGE).await?;
+        Ok(GyrRange::from_reg(gyr_range))
+    }
+
+    /// Set the gyroscope configuration.
+    pub async fn set_gyr_range(&mut self, gyr_range: GyrRange) -> Result<(), Error<CommE>> {
+        let reg = gyr_range.to_reg();
+        self.iface.write_reg(Registers::GYR_RANGE, reg).await?;
+        Ok(())
+    }
+
+    /// Get the Auxiliary device configuration.
+    pub async fn get_aux_conf(&mut self) -> Result<AuxConf, Error<CommE>> {
+        let aux_conf = self.iface.read_reg(Registers::AUX_CONF).await?;
+        Ok(AuxConf::from_reg(aux_conf))
+    }
+
+    /// Set the Auxiliary device configuration.
+    pub async fn set_aux_conf(&mut self, aux_conf: AuxConf) -> Result<(), Error<CommE>> {
+        let reg = aux_conf.to_reg();
+        self.iface.write_reg(Registers::AUX_CONF, reg).await?;
+        Ok(())
+    }
+
+    /// Get the fifo downsampling configuration.
+    pub async fn get_fifo_downs(&mut self) -> Result<FifoDowns, Error<CommE>> {
+        let fifo_downs = self.iface.read_reg(Registers::FIFO_DOWNS).await?;
+        Ok(FifoDowns::from_reg(fifo_downs))
+    }
+
+    /// Set the fifo downsampling configuration.
+    pub async fn set_fifo_downs(&mut self, fifo_downs: FifoDowns) -> Result<(), Error<CommE>> {
+        let reg = fifo_downs.to_reg();
+        self.iface.write_reg(Registers::FIFO_DOWNS, reg).await?;
+        Ok(())
+    }
+
+    /// Get the fifo watermark level.
+    pub async fn get_fifo_wtm(&mut self) -> Result<u16, Error<CommE>> {
+        let mut payload = [Registers::FIFO_WTM_0, 0, 0];
+        self.iface.read(&mut payload).await?;
+        Ok(u16::from(payload[1]) | u16::from(payload[2]) << 8)
+    }
+
+    /// Set the fifo watermark level. Interrupt will trigger when the fifo reaches wtm * 256 bytes.
+    pub async fn set_fifo_wtm(&mut self, wtm: u16) -> Result<(), Error<CommE>> {
+        let reg_0 = wtm as u8;
+        let reg_1 = (wtm >> 8) as u8;
+        let mut payload = [Registers::FIFO_WTM_0, reg_0, reg_1];
+        self.iface.write(&mut payload).await?;
+        Ok(())
+    }
+
+    /// Get the fifo configuration.
+    pub async fn get_fifo_conf(&mut self) -> Result<FifoConf, Error<CommE>> {
+        let mut payload = [Registers::FIFO_CONFIG_0, 0, 0];
+        self.iface.read(&mut payload).await?;
+        Ok(FifoConf::from_regs(payload[1], payload[2]))
+    }
+
+    /// Set the fifo configuration.
+    pub async fn set_fifo_conf(&mut self, fifo_conf: FifoConf) -> Result<(), Error<CommE>> {
+        let (reg_0, reg_1) = fifo_conf.to_regs();
+        let mut payload = [Registers::FIFO_CONFIG_0, reg_0, reg_1];
+        self.iface.write(&mut payload).await?;
+        Ok(())
+    }
+
+    /// Get the current saturation.
+    pub async fn get_saturation(&mut self) -> Result<Saturation, Error<CommE>> {
+        let saturation = self.iface.read_reg(Registers::SATURATION).await?;
+        Ok(Saturation::from_reg(saturation))
+    }
+
+    /// Get the auxiliary device id.
+    pub async fn get_aux_dev_id(&mut self) -> Result<u8, Error<CommE>> {
+        let dev_id = self.iface.read_reg(Registers::AUX_DEV_ID).await?;
+        Ok(dev_id >> 1)
+    }
+
+    /// Set the auxiliary device id.
+    pub async fn set_aux_dev_id(&mut self, dev_id: u8) -> Result<(), Error<CommE>> {
+        let reg = dev_id << 1;
+        self.iface.write_reg(Registers::AUX_DEV_ID, reg).await?;
+        Ok(())
+    }
+
+    /// Get auxiliary device interface configuration.
+    pub async fn get_aux_if_conf(&mut self) -> Result<AuxIfConf, Error<CommE>> {
+        let aux_if_conf = self.iface.read_reg(Registers::AUX_IF_CONF).await?;
+        Ok(AuxIfConf::from_reg(aux_if_conf))
+    }
+
+    /// Set auxiliary device interface configuration.
+    pub async fn set_aux_if_conf(&mut self, aux_if_conf: AuxIfConf) -> Result<(), Error<CommE>> {
+        let reg = aux_if_conf.to_reg();
+        self.iface.write_reg(Registers::AUX_IF_CONF, reg).await?;
+        Ok(())
+    }
+
+    /// Get auxiliary device read address.
+    pub async fn get_aux_rd_addr(&mut self) -> Result<u8, Error<CommE>> {
+        let aux_rd_addr = self.iface.read_reg(Registers::AUX_RD_ADDR).await?;
+        Ok(aux_rd_addr)
+    }
+
+    /// Set auxiliary device read address.
+    pub async fn set_aux_rd_addr(&mut self, aux_rd_addr: u8) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::AUX_RD_ADDR, aux_rd_addr)
+            .await?;
+        Ok(())
+    }
+
+    /// Get auxiliary device write address.
+    pub async fn get_aux_wr_addr(&mut self) -> Result<u8, Error<CommE>> {
+        let aux_wr_addr = self.iface.read_reg(Registers::AUX_WR_ADDR).await?;
+        Ok(aux_wr_addr)
+    }
+
+    /// Set auxiliary device write address.
+    pub async fn set_aux_wr_addr(&mut self, aux_wr_addr: u8) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::AUX_WR_ADDR, aux_wr_addr)
+            .await?;
+        Ok(())
+    }
+
+    /// Get auxiliary device data to write.
+    pub async fn get_aux_wr_data(&mut self) -> Result<u8, Error<CommE>> {
+        let aux_wr_data = self.iface.read_reg(Registers::AUX_WR_DATA).await?;
+        Ok(aux_wr_data)
+    }
+
+    /// Set auxiliary device data to write.
+    pub async fn set_aux_wr_data(&mut self, aux_wr_data: u8) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::AUX_WR_DATA, aux_wr_data)
+            .await?;
+        Ok(())
+    }
+
+    /// Get error register mask.
+    pub async fn get_err_reg_msk(&mut self) -> Result<ErrorRegMsk, Error<CommE>> {
+        let err_reg_msk = self.iface.read_reg(Registers::ERR_REG_MSK).await?;
+        Ok(ErrorRegMsk::from_reg(err_reg_msk))
+    }
+
+    /// Get error register mask.
+    pub async fn set_err_reg_msk(&mut self, err_reg_msk: ErrorRegMsk) -> Result<(), Error<CommE>> {
+        let reg = err_reg_msk.to_reg();
+        self.iface.write_reg(Registers::ERR_REG_MSK, reg).await?;
+        Ok(())
+    }
+
+    /// Get interrupt 1 io control.
+    pub async fn get_int1_io_ctrl(&mut self) -> Result<IntIoCtrl, Error<CommE>> {
+        let int1_io_ctrl = self.iface.read_reg(Registers::INT1_IO_CTRL).await?;
+        Ok(IntIoCtrl::from_reg(int1_io_ctrl))
+    }
+
+    /// Set interrupt 1 io control.
+    pub async fn set_int1_io_ctrl(&mut self, int1_io_ctrl: IntIoCtrl) -> Result<(), Error<CommE>> {
+        let reg = int1_io_ctrl.to_reg();
+        self.iface.write_reg(Registers::INT1_IO_CTRL, reg).await?;
+        Ok(())
+    }
+
+    /// Get interrupt 2 io control.
+    pub async fn get_int2_io_ctrl(&mut self) -> Result<IntIoCtrl, Error<CommE>> {
+        let int2_io_ctrl = self.iface.read_reg(Registers::INT2_IO_CTRL).await?;
+        Ok(IntIoCtrl::from_reg(int2_io_ctrl))
+    }
+
+    /// Set interrupt 2 io control.
+    pub async fn set_int2_io_ctrl(&mut self, int2_io_ctrl: IntIoCtrl) -> Result<(), Error<CommE>> {
+        let reg = int2_io_ctrl.to_reg();
+        self.iface.write_reg(Registers::INT2_IO_CTRL, reg).await?;
+        Ok(())
+    }
+
+    /// Get interrupt latched mode.
+    pub async fn get_int_latch(&mut self) -> Result<IntLatch, Error<CommE>> {
+        let int_latch = self.iface.read_reg(Registers::INT_LATCH).await?;
+        Ok(IntLatch::from_reg(int_latch))
+    }
+
+    /// Set interrupt latched mode.
+    pub async fn set_int_latch(&mut self, int_latch: IntLatch) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::INT_LATCH, int_latch as u8)
+            .await?;
+        Ok(())
+    }
+
+    /// Get interrupt 1 feature mapping.
+    pub async fn get_int1_map_feat(&mut self) -> Result<IntMapFeat, Error<CommE>> {
+        let int1_map_feat = self.iface.read_reg(Registers::INT1_MAP_FEAT).await?;
+        Ok(IntMapFeat::from_reg(int1_map_feat))
+    }
+
+    /// Set interrupt 1 feature mapping.
+    pub async fn set_int1_map_feat(
+        &mut self,
+        int1_map_feat: IntMapFeat,
+    ) -> Result<(), Error<CommE>> {
+        let reg = int1_map_feat.to_reg();
+        self.iface.write_reg(Registers::INT1_MAP_FEAT, reg).await?;
+        Ok(())
+    }
+
+    /// Get interrupt 2 feature mapping.
+    pub async fn get_int2_map_feat(&mut self) -> Result<IntMapFeat, Error<CommE>> {
+        let int2_map_feat = self.iface.read_reg(Registers::INT2_MAP_FEAT).await?;
+        Ok(IntMapFeat::from_reg(int2_map_feat))
+    }
+
+    /// Set interrupt 2 feature mapping.
+    pub async fn set_int2_map_feat(
+        &mut self,
+        int2_map_feat: IntMapFeat,
+    ) -> Result<(), Error<CommE>> {
+        let reg = int2_map_feat.to_reg();
+        self.iface.write_reg(Registers::INT2_MAP_FEAT, reg).await?;
+        Ok(())
+    }
+
+    /// Get interrupt data map.
+    pub async fn get_int_map_data(&mut self) -> Result<IntMapData, Error<CommE>> {
+        let int_map_data = self.iface.read_reg(Registers::INT_MAP_DATA).await?;
+        Ok(IntMapData::from_reg(int_map_data))
+    }
+
+    /// Set interrupt data map.
+    pub async fn set_int_map_data(&mut self, int_map_data: IntMapData) -> Result<(), Error<CommE>> {
+        let reg = int_map_data.to_reg();
+        self.iface.write_reg(Registers::INT_MAP_DATA, reg).await?;
+        Ok(())
+    }
+
+    /// Get initialization control register.
+    pub async fn get_init_ctrl(&mut self) -> Result<u8, Error<CommE>> {
+        let init_ctrl = self.iface.read_reg(Registers::INIT_CTRL).await?;
+        Ok(init_ctrl)
+    }
+
+    /// Set initialization control register (start initialization).
+    pub async fn set_init_ctrl(&mut self, init_ctrl: u8) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::INIT_CTRL, init_ctrl)
+            .await?;
+        Ok(())
+    }
+
+    /// Get init address.
+    pub async fn get_init_addr(&mut self) -> Result<u16, Error<CommE>> {
+        let mut payload = [Registers::INIT_ADDR_0, 0, 0];
+        self.iface.read(&mut payload).await?;
+        Ok(u16::from(payload[1] & 0b0000_1111) | u16::from(payload[2]) << 4)
+    }
+
+    /// Set init address.
+    pub async fn set_init_addr(&mut self, init_addr: u16) -> Result<(), Error<CommE>> {
+        let reg_0 = init_addr as u8 & 0b0000_1111;
+        let reg_1 = (init_addr >> 4) as u8;
+        let mut payload = [Registers::INIT_ADDR_0, reg_0, reg_1];
+        self.iface.write(&mut payload).await?;
+        Ok(())
+    }
+
+    /// Get the initialization register.
+    pub async fn get_init_data(&mut self) -> Result<u8, Error<CommE>> {
+        let init_data = self.iface.read_reg(Registers::INIT_DATA).await?;
+        Ok(init_data)
+    }
+
+    /// Set the initialization register.
+    pub async fn set_init_data(&mut self, init_data: u8) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::INIT_DATA, init_data)
+            .await?;
+        Ok(())
+    }
+
+    /// Get the internal errors.
+    pub async fn get_internal_error(&mut self) -> Result<InternalError, Error<CommE>> {
+        let internal_error = self.iface.read_reg(Registers::INTERNAL_ERROR).await?;
+        Ok(InternalError::from_reg(internal_error))
+    }
+
+    /// Get ASDA pull up.
+    pub async fn get_asda_pullup(&mut self) -> Result<PullUpConf, Error<CommE>> {
+        let aux_if_trim = self.iface.read_reg(Registers::AUX_IF_TRIM).await?;
+        Ok(PullUpConf::from_reg(aux_if_trim))
+    }
+
+    /// Set ASDA pull up.
+    pub async fn set_asda_pullup(&mut self, pull_up_conf: PullUpConf) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::AUX_IF_TRIM, pull_up_conf.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Get gyroscope component retrimming register.
+    pub async fn get_gyr_crt_conf(&mut self) -> Result<GyrCrtConf, Error<CommE>> {
+        let gyr_crt_conf = self.iface.read_reg(Registers::GYR_CRT_CONF).await?;
+        Ok(GyrCrtConf::from_reg(gyr_crt_conf))
+    }
+
+    /// Set gyroscope component retrimming register.
+    /// GyrCrtConf.rdy_for_dl is read-only, only crt_running will be set.
+    pub async fn set_gyr_crt_conf(&mut self, gyr_crt_conf: GyrCrtConf) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::GYR_CRT_CONF, gyr_crt_conf.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Get NVM configuration.
+    pub async fn get_nvm_conf(&mut self) -> Result<bool, Error<CommE>> {
+        let nvm_conf = self.iface.read_reg(Registers::NVM_CONF).await?;
+        Ok((nvm_conf & 1 << 1) != 0)
+    }
+
+    /// Set NVM configuration.
+    pub async fn set_nvm_conf(&mut self, gyr_crt_conf: bool) -> Result<(), Error<CommE>> {
+        let value: u8 = if gyr_crt_conf { 0x01 } else { 0x00 };
+        self.iface
+            .write_reg(Registers::NVM_CONF, value << 1)
+            .await?;
+        Ok(())
+    }
+
+    /// Get the interface configuration.
+    pub async fn get_if_conf(&mut self) -> Result<IfConf, Error<CommE>> {
+        let if_conf = self.iface.read_reg(Registers::IF_CONF).await?;
+        Ok(IfConf::from_reg(if_conf))
+    }
+
+    /// Set the interface configuration.
+    pub async fn set_if_conf(&mut self, if_conf: IfConf) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::IF_CONF, if_conf.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Get the drive strength configuration.
+    pub async fn get_drv(&mut self) -> Result<Drv, Error<CommE>> {
+        let drv = self.iface.read_reg(Registers::DRV).await?;
+        Ok(Drv::from_reg(drv))
+    }
+
+    /// Set the drive strength configuration.
+    pub async fn set_drv(&mut self, drv: Drv) -> Result<(), Error<CommE>> {
+        self.iface.write_reg(Registers::DRV, drv.to_reg()).await?;
+        Ok(())
+    }
+
+    /// Get the accelerometer self test configuration.
+    pub async fn get_acc_self_test(&mut self) -> Result<AccSelfTest, Error<CommE>> {
+        let acc_self_test = self.iface.read_reg(Registers::ACC_SELF_TEST).await?;
+        Ok(AccSelfTest::from_reg(acc_self_test))
+    }
+
+    /// Set the accelerometer self test configuration.
+    pub async fn set_acc_self_test(
+        &mut self,
+        acc_self_test: AccSelfTest,
+    ) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::ACC_SELF_TEST, acc_self_test.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Get the gyroscope self test configuration.
+    pub async fn get_gyr_self_test(&mut self) -> Result<GyrSelfTest, Error<CommE>> {
+        let gyr_self_test = self.iface.read_reg(Registers::GYR_SELF_TEST).await?;
+        Ok(GyrSelfTest::from_reg(gyr_self_test))
+    }
+
+    /// Get NV configuration.
+    pub async fn get_nv_conf(&mut self) -> Result<NvConf, Error<CommE>> {
+        let nv_conf = self.iface.read_reg(Registers::NV_CONF).await?;
+        Ok(NvConf::from_reg(nv_conf))
+    }
+
+    /// Set NV configuration.
+    pub async fn set_nv_conf(&mut self, nv_conf: NvConf) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::NV_CONF, nv_conf.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Get accelerometer offsets.
+    pub async fn get_acc_offsets(&mut self) -> Result<AccOffsets, Error<CommE>> {
+        let mut payload = [Registers::OFFSET_0, 0, 0, 0];
+        self.iface.read(&mut payload).await?;
+        Ok(AccOffsets {
+            x: payload[1],
+            y: payload[2],
+            z: payload[3],
+        })
+    }
+
+    /// Set accelerometer offsets.
+    pub async fn set_acc_offsets(&mut self, acc_offsets: AccOffsets) -> Result<(), Error<CommE>> {
+        let mut payload = [
+            Registers::OFFSET_0,
+            acc_offsets.x,
+            acc_offsets.y,
+            acc_offsets.z,
+        ];
+        self.iface.write(&mut payload).await?;
+        Ok(())
+    }
+
+    /// Get gyroscope offsets.
+    pub async fn get_gyr_offsets(&mut self) -> Result<GyrOffsets, Error<CommE>> {
+        let mut payload = [0_u8; 5];
+        payload[0] = Registers::OFFSET_3;
+        self.iface.read(&mut payload).await?;
+
+        let x = u16::from(payload[1]) | u16::from(payload[4] & 0b0000_0011) << 8;
+        let y = u16::from(payload[2]) | u16::from(payload[4] & 0b0000_1100) << 6;
+        let z = u16::from(payload[3]) | u16::from(payload[4] & 0b0011_0000) << 4;
+        let offset_en = (payload[4] & 1 << 6) != 0;
+        let gain_en = (payload[4] & 1 << 7) != 0;
+
+        Ok(GyrOffsets {
+            x,
+            y,
+            z,
+            offset_en,
+            gain_en,
+        })
+    }
+
+    /// Set gyroscope offsets.
+    pub async fn set_gyr_offsets(&mut self, gyr_offsets: GyrOffsets) -> Result<(), Error<CommE>> {
+        let mut payload = [0_u8; 5];
+        payload[0] = Registers::OFFSET_3;
+
+        payload[1] = gyr_offsets.x as u8;
+        payload[2] = gyr_offsets.y as u8;
+        payload[3] = gyr_offsets.z as u8;
+
+        payload[4] |= (gyr_offsets.x >> 8 & 0b0000_0011) as u8;
+        payload[4] |= (gyr_offsets.y >> 6 & 0b0000_1100) as u8;
+        payload[4] |= (gyr_offsets.z >> 4 & 0b0011_0000) as u8;
+        payload[4] |= if gyr_offsets.offset_en { 0x01 } else { 0x00 } << 6;
+        payload[4] |= if gyr_offsets.gain_en { 0x01 } else { 0x00 } << 7;
+        self.iface.write(&mut payload).await?;
+
+        Ok(())
+    }
+
+    /// Get power configuration.
+    pub async fn get_pwr_conf(&mut self) -> Result<PwrConf, Error<CommE>> {
+        let pwr_conf = self.iface.read_reg(Registers::PWR_CONF).await?;
+        Ok(PwrConf::from_reg(pwr_conf))
+    }
+
+    /// Set power configuration.
+    pub async fn set_pwr_conf(&mut self, pwr_conf: PwrConf) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::PWR_CONF, pwr_conf.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Get power control.
+    pub async fn get_pwr_ctrl(&mut self) -> Result<PwrCtrl, Error<CommE>> {
+        let pwr_ctrl = self.iface.read_reg(Registers::PWR_CTRL).await?;
+        Ok(PwrCtrl::from_reg(pwr_ctrl))
+    }
+
+    /// Set power control.
+    pub async fn set_pwr_ctrl(&mut self, pwr_ctrl: PwrCtrl) -> Result<(), Error<CommE>> {
+        self.iface
+            .write_reg(Registers::PWR_CTRL, pwr_ctrl.to_reg())
+            .await?;
+        Ok(())
+    }
+
+    /// Send a command.
+    pub async fn send_cmd(&mut self, cmd: Cmd) -> Result<(), Error<CommE>> {
+        self.iface.write_reg(Registers::CMD, cmd as u8).await?;
+        Ok(())
+    }
+
+    /// Initialize sensor.
+    pub async fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {
+        // Disable advanced power mode
+        let mut pwr_conf = self.get_pwr_conf().await?;
+        pwr_conf.power_save = false;
+        self.set_pwr_conf(pwr_conf).await?;
+
+        // TODO allow config of pre alloc
+        let mut preallocated_space = alloc_stack!([u8; 512]);
+        let mut vec = FixedVec::new(&mut preallocated_space);
+
+        let mut offset = 0u16;
+        let max_len = config_file.len() as u16;
+        let burst = self.max_burst - 1; // Remove 1 for address byte
+
+        self.set_init_ctrl(0).await?;
+
+        while offset < max_len {
+            self.set_init_addr(offset / 2).await?;
+
+            let end = if (offset + burst) > max_len {
+                max_len
+            } else {
+                offset + burst
+            };
+
+            vec.push(Registers::INIT_DATA)
+                .map_err(|_| Error::<CommE>::Alloc)?;
+
+            vec.push_all(&config_file[offset as usize..end as usize])
+                .map_err(|_| Error::<CommE>::Alloc)?;
+
+            self.iface.write(&mut vec.as_mut_slice()).await?;
+
+            offset += burst;
+            vec.clear();
+        }
+
+        self.set_init_ctrl(1).await?;
+
+        Ok(())
+    }
+}
+
+fn payload_to_axis(payload: &[u8]) -> AxisData {
+    AxisData {
+        x: (i16::from(payload[0]) | (i16::from(payload[1]) << 8)),
+        y: (i16::from(payload[2]) | (i16::from(payload[3]) << 8)),
+        z: (i16::from(payload[4]) | (i16::from(payload[5]) << 8)),
+    }
+}
+
+fn payload_to_sensortime(payload: &[u8]) -> u32 {
+    u32::from(payload[0]) | (u32::from(payload[1]) << 8) | (u32::from(payload[2]) << 16)
+}
