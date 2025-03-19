@@ -1,4 +1,5 @@
 use fixedvec::FixedVec;
+use embedded_hal::delay::DelayNs;
 
 use crate::interface::{I2cAddr, I2cInterface, ReadData, SpiInterface, WriteData};
 use crate::registers::Registers;
@@ -11,20 +12,24 @@ use crate::types::{
     Saturation, Status, WristGestureActivity, FIFO_LENGTH_1_MASK,
 };
 
-pub struct Bmi2<I> {
+pub struct Bmi2<I, D, const N: usize> {
     iface: I,
     max_burst: u16,
+    buffer: [u8; N],
+    delay: D,
 }
 
-impl<I2C> Bmi2<I2cInterface<I2C>> {
+impl<I2C, D, const N: usize> Bmi2<I2cInterface<I2C>, D, N> {
     /// Create a new Bmi270 device with I2C communication.
-    pub fn new_i2c(i2c: I2C, address: I2cAddr, burst: Burst) -> Self {
+    pub fn new_i2c(i2c: I2C, delay: D, address: I2cAddr, burst: Burst) -> Self {
         Bmi2 {
             iface: I2cInterface {
                 i2c,
                 address: address.addr(),
             },
             max_burst: burst.val(),
+            buffer: [0; N],
+            delay,
         }
     }
 
@@ -34,12 +39,17 @@ impl<I2C> Bmi2<I2cInterface<I2C>> {
     }
 }
 
-impl<SPI> Bmi2<SpiInterface<SPI>> {
+impl<SPI, D, const N: usize> Bmi2<SpiInterface<SPI>, D, N> 
+where 
+    D: embedded_hal::delay::DelayNs
+{
     /// Create a new Bmi270 device with SPI communication.
-    pub fn new_spi(spi: SPI, burst: Burst) -> Self {
+    pub fn new_spi(spi: SPI, delay: D, burst: Burst) -> Self {
         Bmi2 {
             iface: SpiInterface { spi },
             max_burst: burst.val(),
+            buffer: [0; N],
+            delay,
         }
     }
 
@@ -49,9 +59,10 @@ impl<SPI> Bmi2<SpiInterface<SPI>> {
     }
 }
 
-impl<I, CommE> Bmi2<I>
+impl<I, D, CommE, const N: usize> Bmi2<I, D, N>
 where
     I: ReadData<Error = Error<CommE>> + WriteData<Error = Error<CommE>>,
+    D: embedded_hal::delay::DelayNs, // Add constraint for D
 {
     /// Get the chip id.
     pub fn get_chip_id(&mut self) -> Result<u8, Error<CommE>> {
