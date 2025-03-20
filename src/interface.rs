@@ -75,18 +75,18 @@ where
         payload[0] += 0x80;
 
         // `write` asserts and deasserts CS for us. No need to do it manually!
-        let res = self.spi.write(&payload).map_err(Error::Comm);
+        
 
-        res
+        self.spi.write(payload).map_err(Error::Comm)
     }
 
     fn write_reg(&mut self, register: u8, data: u8) -> Result<(), Self::Error> {
         let payload: [u8; 2] = [register + 0x80, data];
 
         // `write` asserts and deasserts CS for us. No need to do it manually!
-        let res = self.spi.write(&payload).map_err(Error::Comm);
+        
 
-        res
+        self.spi.write(&payload).map_err(Error::Comm)
     }
 }
 

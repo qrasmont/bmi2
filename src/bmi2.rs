@@ -790,7 +790,7 @@ where
             vec.push_all(&config_file[offset as usize..end as usize])
                 .map_err(|_| Error::Alloc)?;
             
-            self.iface.write(&mut vec.as_mut_slice())?;
+            self.iface.write(vec.as_mut_slice())?;
             
             offset += chunk_size;
             self.delay.delay_us(2);
