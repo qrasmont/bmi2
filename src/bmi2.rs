@@ -15,7 +15,6 @@ use crate::types::{
 pub struct Bmi2<I, D, const N: usize> {
     iface: I,
     max_burst: u16,
-    buffer: [u8; N],
     delay: D,
 }
 
@@ -28,7 +27,6 @@ impl<I2C, D, const N: usize> Bmi2<I2cInterface<I2C>, D, N> {
                 address: address.addr(),
             },
             max_burst: burst.val(),
-            buffer: [0; N],
             delay,
         }
     }
@@ -48,7 +46,6 @@ where
         Bmi2 {
             iface: SpiInterface { spi },
             max_burst: burst.val(),
-            buffer: [0; N],
             delay,
         }
     }
@@ -722,8 +719,7 @@ where
         pwr_conf.power_save = false;
         self.set_pwr_conf(pwr_conf)?;
 
-        // TODO allow config of pre alloc
-        let mut preallocated_space = alloc_stack!([u8; 512]);
+        let mut preallocated_space = alloc_stack!([u8; N]);
         let mut vec = FixedVec::new(&mut preallocated_space);
 
         let mut offset = 0u16;
