@@ -1,3 +1,7 @@
+pub const BMI160_CHIP_ID: u8 = 0xD1;
+pub const BMI260_CHIP_ID: u8 = 0x27;
+pub const BMI270_CHIP_ID: u8 = 0x24;
+
 /// The possible errors that could be encountered.
 #[derive(Debug)]
 pub enum Error<CommE> {
@@ -5,6 +9,12 @@ pub enum Error<CommE> {
     Comm(CommE),
     /// Memory allocation error during initialization.
     Alloc,
+    /// Invalid Chip Id.
+    InvalidChipId,
+    /// Buffer too small.
+    BufferTooSmall,
+    /// Initialization Failed.
+    InitFailed,
 }
 
 /// Data burst.
