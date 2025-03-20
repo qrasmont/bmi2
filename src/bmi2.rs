@@ -711,13 +711,32 @@ where
         Ok(())
     }
 
+    /// Disable power save mode.
+    pub fn disable_power_save(&mut self) -> Result<(), Error<CommE>> {
+        let mut pwr_conf = self.get_pwr_conf()?;
+        pwr_conf.power_save = false;
+        self.set_pwr_conf(pwr_conf)?;
+        // Critical delay after disabling power save
+        self.delay.delay_us(450);
+        Ok(())
+    }
+
+    /// Enable power save mode.
+    pub fn enable_power_save(&mut self) -> Result<(), Error<CommE>> {
+        let mut pwr_conf = self.get_pwr_conf()?;
+        pwr_conf.power_save = true;
+        self.set_pwr_conf(pwr_conf)?;
+        // Critical delay after enabling power save
+        self.delay.delay_us(450);
+        Ok(())
+    }
+
+
     /// Initialize sensor.
     pub fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {
 
         // Disable advanced power mode
-        let mut pwr_conf = self.get_pwr_conf()?;
-        pwr_conf.power_save = false;
-        self.set_pwr_conf(pwr_conf)?;
+        self.disable_power_save()?;
 
         let mut preallocated_space = alloc_stack!([u8; N]);
         let mut vec = FixedVec::new(&mut preallocated_space);
