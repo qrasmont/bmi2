@@ -25,9 +25,9 @@ const BUFFER_SIZE: usize = 512;
 /// - This is a limitation from your device or its HAL.
 let mut bmi = Bmi2::<_, _, BUFFER_SIZE>::new_i2c(
     i2c, 
+    delay,
     I2cAddr::Alternative, 
-    Burst::Other(255),
-    delay
+    Burst::new(255),
 );
 
 /// Get the chip id. Should be 0x24 or 36 in decimal
