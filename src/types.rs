@@ -1,3 +1,7 @@
+pub const BMI160_CHIP_ID: u8 = 0xD1;
+pub const BMI260_CHIP_ID: u8 = 0x27;
+pub const BMI270_CHIP_ID: u8 = 0x24;
+
 /// The possible errors that could be encountered.
 #[derive(Debug)]
 pub enum Error<CommE> {
@@ -5,28 +9,57 @@ pub enum Error<CommE> {
     Comm(CommE),
     /// Memory allocation error during initialization.
     Alloc,
+    /// Invalid Chip Id.
+    InvalidChipId,
+    /// Buffer too small.
+    BufferTooSmall,
+    /// Initialization Failed.
+    InitFailed,
 }
 
 /// Data burst.
-pub enum Burst {
-    /// Burst of 512 bytes.
+pub struct Burst {
+    max: u16,
+    kind: BurstKind,
+}
+
+enum BurstKind {
     Max,
-    /// An other burst amount under 512 bytes.
     Other(u16),
 }
 
-impl Default for Burst {
+impl Default for BurstKind {
     fn default() -> Self {
-        Burst::Max
+        Self::Max
     }
 }
 
 impl Burst {
-    pub fn val(self) -> u16 {
-        match self {
-            Burst::Max => 512,
-            Burst::Other(v) => v % 512,
+    pub fn new(max: u16) -> Self {
+        Self {
+            max,
+            kind: BurstKind::default(),
         }
+    }
+
+    pub fn custom(max: u16, value: u16) -> Self {
+        Self {
+            max,
+            kind: BurstKind::Other(value),
+        }
+    }
+
+    pub fn val(&self) -> u16 {
+        match self.kind {
+            BurstKind::Max => self.max,
+            BurstKind::Other(v) => v.min(self.max),
+        }
+    }
+}
+
+impl Default for Burst {
+    fn default() -> Self {
+        Self::new(512)
     }
 }
 
