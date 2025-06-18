@@ -727,6 +727,28 @@ where
         Ok(())
     }
 
+    /// Write auxiliary data to the sensor.
+    pub fn aux_read_reg(
+        &mut self,
+        reg_addr: u8,
+    ) -> Result<u8, Error<CommE>> {
+        self.iface.write_reg(Registers::AUX_RD_ADDR, reg_addr)?;
+        while self.get_status()?.aux_dev_busy {
+            self.delay.delay_us(10);
+        }
+        let r = self.iface.read_reg(Registers::AUX_DATA_0)?;
+        Ok(r)
+    }
+
+
+    pub fn write_aux_data( &mut self, reg_addr: u8, reg_data: u8) -> Result<(), Error<CommE>> {
+        self.iface.write_reg(Registers::AUX_WR_DATA, reg_data)?;
+        while self.get_status()?.aux_dev_busy {
+            self.delay.delay_us(10);
+        }
+        self.iface.write_reg(Registers::AUX_WR_ADDR, reg_addr)?;
+        Ok(())
+    }
 
     /// Initialize sensor.
     pub fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {

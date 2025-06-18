@@ -1359,6 +1359,7 @@ impl IfConfMask {
 
 /// SPI interface mode.
 #[repr(u8)]
+#[derive(Debug, Clone, Copy)]
 pub enum SpiMode {
     /// SPI 4-wire mode.
     Spi4 = 0x00,
@@ -1391,8 +1392,8 @@ impl IfConf {
                 0x01 => SpiMode::Spi3,
                 _ => panic!(), // TODO
             },
-            ois_en: (reg & IfConfMask::OIS_EN) >> 2 != 0,
-            aux_en: (reg & IfConfMask::AUX_EN) >> 3 != 0,
+            ois_en: (reg & IfConfMask::OIS_EN) >> 4 != 0,
+            aux_en: (reg & IfConfMask::AUX_EN) >> 5 != 0,
         }
     }
 
@@ -1402,7 +1403,7 @@ impl IfConf {
         let ois_en = if self.ois_en { 0x01 } else { 0x00 };
         let aux_en = if self.aux_en { 0x01 } else { 0x00 };
 
-        spi_mode | spi_mode_ois << 1 | ois_en << 2 | aux_en << 3
+        spi_mode | spi_mode_ois << 1 | ois_en << 4 | aux_en << 5
     }
 }
 
