@@ -10,3 +10,5 @@ check-async-sync:
 	diff -u /tmp/stripped-interface_async.rs src/interface.rs
 	cat src/bmi2_async.rs | sed -e 's/[.]await//' -e 's/async //' -e 's/_async//' | grep -vF '#[allow(async_fn_in_trait)]' | rustfmt > /tmp/stripped-bmi2_async.rs
 	diff -u /tmp/stripped-bmi2_async.rs src/bmi2.rs
+	# Make sure everything actually compiles once we're done.
+	cargo check --all-features
