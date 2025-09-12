@@ -11,6 +11,7 @@ use nrf52840_hal::{
     pac,
     timer::Timer,
     twim::{self, Twim},
+    Delay,
 };
 
 use defmt_rtt as _;
@@ -22,6 +23,7 @@ use bmi2::{types::Burst, types::PwrCtrl, I2cAddr};
 #[entry]
 fn main() -> ! {
     let p = pac::Peripherals::take().unwrap();
+    let core = pac::CorePeripherals::take().unwrap();
 
     let mut timer = Timer::new(p.TIMER0);
     let port0 = p0::Parts::new(p.P0);
@@ -33,7 +35,11 @@ fn main() -> ! {
 
     let i2c = Twim::new(p.TWIM0, twim_pins, twim::Frequency::K100);
 
-    let mut bmi = Bmi2::new_i2c(i2c, I2cAddr::Alternative, Burst::Other(255));
+    let delay = Delay::new(core.SYST);
+
+    const BUFFER_SIZE: usize = 256;
+
+    let mut bmi = Bmi2::<_, _, BUFFER_SIZE>::new_i2c(i2c, delay, I2cAddr::Alternative, Burst::new(255));
     let chip_id = bmi.get_chip_id().unwrap();
     defmt::info!("chip id: {}", chip_id);
 
