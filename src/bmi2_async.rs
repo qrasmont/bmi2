@@ -1,3 +1,4 @@
+use embedded_hal::delay::DelayNs;
 use fixedvec::FixedVec;
 
 use crate::registers::Registers;
@@ -11,23 +12,26 @@ use crate::types::{
     Data, Drv, Error, ErrorReg, ErrorRegMsk, Event, FifoConf, FifoDowns, GyrConf, GyrCrtConf,
     GyrOffsets, GyrRange, GyrSelfTest, IfConf, IntIoCtrl, IntLatch, IntMapData, IntMapFeat,
     InternalError, InternalStatus, InterruptStatus, NvConf, PullUpConf, PwrConf, PwrCtrl,
-    Saturation, Status, WristGestureActivity, FIFO_LENGTH_1_MASK,
+    Saturation, Status, WristGestureActivity, BMI160_CHIP_ID, BMI260_CHIP_ID, BMI270_CHIP_ID,
+    FIFO_LENGTH_1_MASK,
 };
 
-pub struct Bmi2<I> {
+pub struct Bmi2<I, D, const N: usize> {
     iface: I,
     max_burst: u16,
+    delay: D,
 }
 
-impl<I2C> Bmi2<I2cInterface<I2C>> {
+impl<I2C, D, const N: usize> Bmi2<I2cInterface<I2C>, D, N> {
     /// Create a new Bmi270 device with I2C communication.
-    pub fn new_i2c(i2c: I2C, address: I2cAddr, burst: Burst) -> Self {
+    pub fn new_i2c(i2c: I2C, delay: D, address: I2cAddr, burst: Burst) -> Self {
         Bmi2 {
             iface: I2cInterface {
                 i2c,
                 address: address.addr(),
             },
             max_burst: burst.val(),
+            delay,
         }
     }
 
@@ -37,12 +41,16 @@ impl<I2C> Bmi2<I2cInterface<I2C>> {
     }
 }
 
-impl<SPI> Bmi2<SpiInterface<SPI>> {
+impl<SPI, D, const N: usize> Bmi2<SpiInterface<SPI>, D, N>
+where
+    D: DelayNs,
+{
     /// Create a new Bmi270 device with SPI communication.
-    pub fn new_spi(spi: SPI, burst: Burst) -> Self {
+    pub fn new_spi(spi: SPI, delay: D, burst: Burst) -> Self {
         Bmi2 {
             iface: SpiInterface { spi },
             max_burst: burst.val(),
+            delay,
         }
     }
 
@@ -52,9 +60,10 @@ impl<SPI> Bmi2<SpiInterface<SPI>> {
     }
 }
 
-impl<I, CommE> Bmi2<I>
+impl<I, D, CommE, const N: usize> Bmi2<I, D, N>
 where
     I: ReadData<Error = Error<CommE>> + WriteData<Error = Error<CommE>>,
+    D: embedded_hal::delay::DelayNs, // Add constraint for D
 {
     /// Get the chip id.
     pub async fn get_chip_id(&mut self) -> Result<u8, Error<CommE>> {
@@ -729,45 +738,107 @@ where
         Ok(())
     }
 
-    /// Initialize sensor.
-    pub async fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {
-        // Disable advanced power mode
+    /// Disable power save mode.
+    pub async fn disable_power_save(&mut self) -> Result<(), Error<CommE>> {
         let mut pwr_conf = self.get_pwr_conf().await?;
         pwr_conf.power_save = false;
         self.set_pwr_conf(pwr_conf).await?;
+        // Critical delay after disabling power save
+        self.delay.delay_us(450);
+        Ok(())
+    }
 
-        // TODO allow config of pre alloc
-        let mut preallocated_space = alloc_stack!([u8; 512]);
-        let mut vec = FixedVec::new(&mut preallocated_space);
+    /// Enable power save mode.
+    pub async fn enable_power_save(&mut self) -> Result<(), Error<CommE>> {
+        let mut pwr_conf = self.get_pwr_conf().await?;
+        pwr_conf.power_save = true;
+        self.set_pwr_conf(pwr_conf).await?;
+        // Critical delay after enabling power save
+        self.delay.delay_us(450);
+        Ok(())
+    }
 
-        let mut offset = 0u16;
-        let max_len = config_file.len() as u16;
-        let burst = self.max_burst - 1; // Remove 1 for address byte
-
-        self.set_init_ctrl(0).await?;
-
-        while offset < max_len {
-            self.set_init_addr(offset / 2).await?;
-
-            let end = if (offset + burst) > max_len {
-                max_len
-            } else {
-                offset + burst
-            };
-
-            vec.push(Registers::INIT_DATA)
-                .map_err(|_| Error::<CommE>::Alloc)?;
-
-            vec.push_all(&config_file[offset as usize..end as usize])
-                .map_err(|_| Error::<CommE>::Alloc)?;
-
-            self.iface.write(&mut vec.as_mut_slice()).await?;
-
-            offset += burst;
-            vec.clear();
+    /// Initialize sensor.
+    pub async fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {
+        // Verify chip ID first
+        let chip_id = self.iface.read_reg(Registers::CHIP_ID).await?;
+        if !(chip_id == BMI160_CHIP_ID || chip_id == BMI260_CHIP_ID || chip_id == BMI270_CHIP_ID) {
+            return Err(Error::InvalidChipId);
         }
 
+        // Reset Chip, mandatory per datasheet
+        self.send_cmd(Cmd::SoftReset).await?;
+        self.delay.delay_us(2000);
+
+        // Disable advanced power mode
+        self.disable_power_save().await?;
+
+        // Verify buffer size
+        if self.max_burst as usize > N {
+            return Err(Error::<CommE>::BufferTooSmall);
+        }
+
+        let mut preallocated_space = alloc_stack!([u8; N]);
+        let mut vec = FixedVec::new(&mut preallocated_space);
+
+        // Offset and burst calculation
+        let mut offset = 0u16;
+        let max_len = config_file.len() as u16;
+        let burst = if self.max_burst % 2 == 0 {
+            self.max_burst - 1 // Address byte + even number of data bytes
+        } else {
+            self.max_burst - 2 // Make sure we have even data bytes
+        };
+
+        let init_ctrl = self.get_init_ctrl().await?;
+        self.set_init_ctrl(init_ctrl & 0b1111_1110).await?;
+        self.delay.delay_us(450);
+
+        while offset < max_len {
+            // INIT_ADDR should point to 16-bit words
+            self.set_init_addr(offset / 2).await?; // needs to be divided by 2 because offset is in bytes
+
+            // Ensure we're writing complete 16-bit words
+            let mut chunk_size = burst;
+            if (chunk_size % 2) != 0 {
+                // If burst size would result in odd number of bytes, reduce by 1
+                chunk_size -= 1;
+            }
+
+            let end = if (offset + chunk_size) > max_len {
+                // For the last chunk, ensure we still write complete 16-bit words
+                let remaining = max_len - offset;
+                offset + (remaining - (remaining % 2))
+            } else {
+                offset + chunk_size
+            };
+
+            vec.clear();
+            vec.push(Registers::INIT_DATA).map_err(|_| Error::Alloc)?;
+
+            vec.push_all(&config_file[offset as usize..end as usize])
+                .map_err(|_| Error::Alloc)?;
+
+            self.iface.write(vec.as_mut_slice()).await?;
+
+            offset += chunk_size;
+            self.delay.delay_us(2);
+        }
+
+        // This operation must not be performed more than once after POR or soft reset.
         self.set_init_ctrl(1).await?;
+        self.delay.delay_us(2);
+
+        self.enable_power_save().await?;
+
+        // Initialization takes at most 20ms per datasheet
+        self.delay.delay_us(20_000);
+
+        let internal_status = self.iface.read_reg(Registers::INTERNAL_STATUS).await?;
+
+        if internal_status & 0b0000_0001 != 1 {
+            return Err(Error::InitFailed);
+        }
 
         Ok(())
     }
