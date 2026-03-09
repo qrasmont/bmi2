@@ -9,7 +9,7 @@ repository = "https://github.com/qrasmont/bmi2"
 readme = "README.md"
 keywords = ["bmi2", "bmi270", "bmi260", "embedded-hal", "imu"]
 
-exclude = ["examples/nrf52840/.cargo"]
+exclude = ["examples/nrf52840/.cargo", "examples/esp32/.cargo"]
 
 [dependencies]
 embedded-hal = "1.0.0"
