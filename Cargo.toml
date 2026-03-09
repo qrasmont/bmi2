@@ -14,3 +14,8 @@ exclude = ["examples/nrf52840/.cargo"]
 [dependencies]
 embedded-hal = "1.0.0"
 fixedvec = "0.2.4"
+embedded-hal-async = {version = "1.0.0", optional = true }
+
+
+[features]
+async = ["dep:embedded-hal-async"]
