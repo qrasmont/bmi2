@@ -4,6 +4,19 @@
 
 This is an [embedded-hal](https://github.com/rust-embedded/embedded-hal) driver for the Bosch BMI260/270 inertial measurement unit.
 
+## Building
+
+Building the blocking variant
+
+```bash
+cargo build --features blocking
+```
+
+Building the async variant
+```bash
+cargo build --features async
+```
+
 ## Quick start
 
 ```rust
