@@ -13,11 +13,11 @@ exclude = ["examples/nrf52840/.cargo"]
 
 [dependencies]
 maybe-async = "0.2.10"
-embedded-hal = { version = "1.0.0" }
-embedded-hal-async = { version = "1.0.0" }
+embedded-hal = { version = "1.0.0" , optional = true }
+embedded-hal-async = { version = "1.0.0", optional = true }
 fixedvec = "0.2.4"
 
 [features]
 default = []
-blocking = ["maybe-async/is_sync"]
-async = []
+blocking = ["dep:embedded-hal", "maybe-async/is_sync"]
+async = ["dep:embedded-hal-async"]
