@@ -4,6 +4,7 @@ pub const BMI270_CHIP_ID: u8 = 0x24;
 
 /// The possible errors that could be encountered.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<CommE> {
     /// Communication error over I2C or SPI.
     Comm(CommE),
@@ -19,12 +20,14 @@ pub enum Error<CommE> {
 
 /// Data burst.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Burst {
     max: u16,
     kind: BurstKind,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 enum BurstKind {
     Max,
     Other(u16),
@@ -75,6 +78,7 @@ impl ErrRegMask {
 
 /// Reports sensor error conditions.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ErrorReg {
     /// The chip is not in an operational state.
     pub fatal_err: bool,
@@ -108,6 +112,7 @@ impl StatusBits {
 
 /// Sensor status flags.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Status {
     /// Data ready for Accelerometer.
     pub acc_data_ready: bool,
@@ -135,6 +140,7 @@ impl Status {
 
 /// Axis data.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AxisData {
     /// X axis data.
     pub x: i16,
@@ -146,6 +152,7 @@ pub struct AxisData {
 
 /// Auxiliary sensor data.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AuxData {
     /// Axis data.
     pub axis: AxisData,
@@ -156,6 +163,7 @@ pub struct AuxData {
 
 /// Sensor data.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Data {
     /// Accelerometer data.
     pub acc: AxisData,
@@ -174,6 +182,7 @@ impl EventMask {
 /// Possible persistent errors.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PersistentErrors {
     /// No errors reported.
     NoErr = 0x00,
@@ -187,6 +196,7 @@ pub enum PersistentErrors {
 
 /// Sensor event flags. Will be cleared on read when bit 0 is sent out over the bus.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Event {
     /// True after device power up or softreset. False after status read.
     pub por_detected: bool,
@@ -232,6 +242,7 @@ impl InterruptStatus1Mask {
 
 /// Interrut/Feature Status. Will be cleared on read.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct InterruptStatus {
     /// Sigmotion output.
     pub sig_motion_out: bool,
@@ -290,6 +301,7 @@ impl WristGestureActivityMask {
 /// Wrist gestures.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum WristGesture {
     /// Unknown.
     Unknown = 0x00,
@@ -308,6 +320,7 @@ pub enum WristGesture {
 /// Activity detection.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Activity {
     /// User stationnary.
     Still = 0x00,
@@ -321,6 +334,7 @@ pub enum Activity {
 
 /// Wrist gesture and activity.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct WristGestureActivity {
     /// Wrist gesture.
     pub wrist_gesture: WristGesture,
@@ -361,6 +375,7 @@ impl InternalStatusMask {
 /// Internal status message.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Message {
     /// ASIC is not initialized.
     NotInit = 0x00,
@@ -382,6 +397,7 @@ pub enum Message {
 
 /// Internal status.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct InternalStatus {
     /// Internal status message.
     pub message: Message,
@@ -423,6 +439,7 @@ impl AccConfMask {
 /// Accelerometer Output Data Rate in Hz.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Odr {
     /// 25/32 Hz.
     Odr0p78 = 0x01,
@@ -459,6 +476,7 @@ pub enum Odr {
 /// Accelerometer filter config & averaging.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AccBwp {
     /// OSR4 filter, no averaging.
     Osr4Avg1 = 0x00,
@@ -481,6 +499,7 @@ pub enum AccBwp {
 /// Accelerometer filter performance mode.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PerfMode {
     /// Power optimized.
     Power = 0x00,
@@ -490,6 +509,7 @@ pub enum PerfMode {
 
 /// Accelerometer configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AccConf {
     /// Accelerometer Output Data Rate in Hz.
     pub odr: Odr,
@@ -556,6 +576,7 @@ impl AccRangeMask {
 /// Accelerometer g range.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AccRange {
     /// +/- 2g.
     Range2g = 0x00,
@@ -590,6 +611,7 @@ impl GyrConfMask {
 /// Gyroscope filter config & averaging.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GyrBwp {
     /// OSR4 filter, no averaging.
     Osr4 = 0x00,
@@ -603,6 +625,7 @@ pub enum GyrBwp {
 
 /// Gyroscope configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GyrConf {
     /// Gyroscope Output Data Rate in Hz.
     pub odr: Odr,
@@ -673,6 +696,7 @@ impl GyrRangeMask {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GyrRangeVal {
     Range2000 = 0x00,
     Range1000 = 0x01,
@@ -683,12 +707,14 @@ pub enum GyrRangeVal {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum OisRange {
     Range250 = 0x00,
     Range2000 = 0x01,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GyrRange {
     pub range: GyrRangeVal,
     pub ois_range: OisRange,
@@ -729,6 +755,7 @@ impl AuxConfMask {
 
 /// Auxiliary device configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AuxConf {
     /// Auxiliary device Output Data Rate in Hz.
     pub odr: Odr,
@@ -780,6 +807,7 @@ impl FifoDownsMask {
 /// Select filtered or unfiltered fifo data.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FilterData {
     Unfiltered = 0x00,
     Filtered = 0x01,
@@ -787,6 +815,7 @@ pub enum FilterData {
 
 /// Fifo downsampling configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct FifoDowns {
     /// Downsampling for the gyroscope.
     pub gyr_downs: u8,
@@ -845,6 +874,7 @@ impl FifoConfig1Mask {
 /// Fifo interrupt tag enable.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FifoTagIntEnable {
     IntEdge = 0x00,
     IntLevel = 0x01,
@@ -854,6 +884,7 @@ pub enum FifoTagIntEnable {
 
 /// Fifo configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct FifoConf {
     /// Stop wriing samples into the fifo when it is full.
     pub stop_on_full: bool,
@@ -934,6 +965,7 @@ impl SaturationMask {
 /// Notifies if the current values have been saturated. Synchronously update with the data
 /// registers.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Saturation {
     /// Accelerometer x axis is saturated.
     pub acc_x: bool,
@@ -973,6 +1005,7 @@ impl AuxIfConfMask {
 /// Read burst.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ReadBurst {
     /// 1 byte.
     Burst1Byte = 0x00,
@@ -986,6 +1019,7 @@ pub enum ReadBurst {
 
 /// Auxiliary sensor configuration
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AuxIfConf {
     /// Burst data lenngth.
     pub aux_read_burst: ReadBurst,
@@ -1031,6 +1065,7 @@ impl AuxIfConf {
 
 /// Define which error flag will trigger the error interrupt.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ErrorRegMsk {
     /// Use fatal error.
     pub fatal_err: bool,
@@ -1073,6 +1108,7 @@ impl IntIoCtrlMask {
 /// Output level.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum OutputLevel {
     /// Active low.
     ActiveLow = 0x00,
@@ -1083,6 +1119,7 @@ pub enum OutputLevel {
 /// Output behavior.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum OutputBehavior {
     /// Active low.
     PushPull = 0x00,
@@ -1092,6 +1129,7 @@ pub enum OutputBehavior {
 
 /// Configuration of the electrical behavior of an interrupt.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct IntIoCtrl {
     pub level: OutputLevel,
     pub od: OutputBehavior,
@@ -1135,6 +1173,7 @@ impl IntLatchMask {
 /// Latched mode for the interrupt.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum IntLatch {
     /// Non latched.
     None = 0x00,
@@ -1165,6 +1204,7 @@ impl IntMapFeatMask {
 
 /// Interrupt feature mapping.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct IntMapFeat {
     /// Sigmotion output.
     pub sig_motion_out: bool,
@@ -1232,6 +1272,7 @@ impl IntMapDataMask {
 
 /// Data interrupt mapping.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MapData {
     /// Map fifo full interrupt.
     pub ffull: bool,
@@ -1245,6 +1286,7 @@ pub struct MapData {
 
 /// Data interrupt for int1 and int2.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct IntMapData {
     /// Data interrupt mapping for int1.
     pub int1: MapData,
@@ -1301,6 +1343,7 @@ impl InternalErrorMask {
 
 /// Internal error flags.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct InternalError {
     /// Long processing time, processing halted.
     pub int_err_1: bool,
@@ -1328,6 +1371,7 @@ impl AuxIfTrimMask {
 /// Pull up configuration.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PullUpConf {
     /// Pull up off
     PullUpOff = 0x00,
@@ -1364,6 +1408,7 @@ impl GyrCrtConfMask {
 /// Crt data ready for download.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ReadyForDl {
     /// Pull up off
     OnGoing = 0x00,
@@ -1409,6 +1454,7 @@ impl IfConfMask {
 /// SPI interface mode.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SpiMode {
     /// SPI 4-wire mode.
     Spi4 = 0x00,
@@ -1418,6 +1464,7 @@ pub enum SpiMode {
 
 /// Serial interface settings.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct IfConf {
     /// SPI interface mode for primary interface.
     pub spi_mode: SpiMode,
@@ -1468,6 +1515,7 @@ impl DrvMask {
 /// Drive strength. L7 is 10x stronger than L0.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DriveStrength {
     L0 = 0b000,
     L1 = 0b001,
@@ -1481,6 +1529,7 @@ pub enum DriveStrength {
 
 /// Drive strength control register.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Drv {
     /// Output pad drive strength for the SDO and SDx pins
     pub io_pad_drv1: DriveStrength,
@@ -1542,6 +1591,7 @@ impl AccSelfTestMask {
 /// A sign.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Sign {
     /// Negative.
     Negative = 0x00,
@@ -1552,6 +1602,7 @@ pub enum Sign {
 /// An amplitude.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Amplitude {
     /// Low..
     Low = 0x00,
@@ -1561,6 +1612,7 @@ pub enum Amplitude {
 
 /// Accelerometer self test settings.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AccSelfTest {
     /// Enable accelerometer self test.
     pub enable: bool,
@@ -1606,6 +1658,7 @@ impl GyrSelfTestMask {
 
 /// Gyroscope self test settings.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GyrSelfTest {
     /// Functional test of detection channels finished.
     pub done: bool,
@@ -1639,6 +1692,7 @@ impl NvConfMask {
 /// A timer period.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TimePedriod {
     /// A 1.25ms period.
     Short1_25Ms = 0x00,
@@ -1648,6 +1702,7 @@ pub enum TimePedriod {
 
 /// NVM backed configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct NvConf {
     /// Enable SPI as the primary interface instead of I2C.
     pub spi_en: bool,
@@ -1686,6 +1741,7 @@ impl NvConf {
 
 /// Accelerometer offsets compensation.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AccOffsets {
     /// Offset compensation for the x axis.
     pub x: u8,
@@ -1697,6 +1753,7 @@ pub struct AccOffsets {
 
 /// Gyroscope offsets compensation.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GyrOffsets {
     /// Offset compensation for the x axis.
     pub x: u16,
@@ -1719,6 +1776,7 @@ impl PwrConfMask {
 
 /// Power mode configuration.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PwrConf {
     /// Advanced power save.
     pub power_save: bool,
@@ -1756,6 +1814,7 @@ impl PwrCtrlMask {
 
 /// Power mode control.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PwrCtrl {
     /// Enable auxiliary device.
     pub aux_en: bool,
@@ -1790,6 +1849,7 @@ impl PwrCtrl {
 /// Commands.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Cmd {
     /// Trigger special gyro operations.
     GTrigger = 0x02,
