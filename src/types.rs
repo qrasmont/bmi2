@@ -640,7 +640,7 @@ impl GyrConf {
 
 pub struct GyrRangeMask;
 impl GyrRangeMask {
-    pub const GYR_RANGE: u8 = 0b0000_0011;
+    pub const GYR_RANGE: u8 = 0b0000_0111;
     pub const OIS_RANGE: u8 = 1 << 3;
 }
 
