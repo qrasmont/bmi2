@@ -1338,7 +1338,7 @@ pub struct GyrCrtConf {
 impl GyrCrtConf {
     pub fn from_reg(reg: u8) -> GyrCrtConf {
         GyrCrtConf {
-            crt_running: reg & GyrCrtConfMask::CRT_RUNNING >> 2 != 0,
+            crt_running: (reg & GyrCrtConfMask::CRT_RUNNING) >> 2 != 0,
             rdy_for_dl: match (reg & GyrCrtConfMask::RDY_FOR_DL) >> 3 {
                 0x00 => ReadyForDl::OnGoing,
                 0x01 => ReadyForDl::Complete,
