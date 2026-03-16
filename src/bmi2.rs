@@ -37,8 +37,8 @@ impl<I2C, D, const N: usize> Bmi2<I2cInterface<I2C>, D, N> {
     }
 
     /// Release I2C.
-    pub fn release(self) -> I2C {
-        self.iface.i2c
+    pub fn release(self) -> (I2C, D) {
+        (self.iface.i2c, self.delay)
     }
 }
 
@@ -56,8 +56,8 @@ where
     }
 
     /// Release I2C and CS.
-    pub fn release(self) -> SPI {
-        self.iface.spi
+    pub fn release(self) -> (SPI, D) {
+        (self.iface.spi, self.delay)
     }
 }
 
