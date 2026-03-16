@@ -1024,7 +1024,7 @@ impl ErrorRegMsk {
         let fifo_err = if self.fifo_err { 0x01 } else { 0x00 };
         let aux_err = if self.aux_err { 0x01 } else { 0x00 };
 
-        fatal_err | internal_err << 1 | fifo_err << 6 | aux_err << 7
+        fatal_err | internal_err | fifo_err << 6 | aux_err << 7
     }
 }
 

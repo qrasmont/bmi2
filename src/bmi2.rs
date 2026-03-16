@@ -394,7 +394,7 @@ where
         Ok(ErrorRegMsk::from_reg(err_reg_msk))
     }
 
-    /// Get error register mask.
+    /// Set error register mask.
     pub async fn set_err_reg_msk(&mut self, err_reg_msk: ErrorRegMsk) -> Result<(), Error<CommE>> {
         let reg = err_reg_msk.to_reg();
         self.iface.write_reg(Registers::ERR_REG_MSK, reg).await?;
