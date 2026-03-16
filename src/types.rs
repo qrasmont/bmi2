@@ -529,6 +529,11 @@ impl AccConf {
     }
 }
 
+pub struct AccRangeMask;
+impl AccRangeMask {
+    pub const ACC_RANGE: u8 = 0b0000_0011;
+}
+
 /// Accelerometer g range.
 #[repr(u8)]
 pub enum AccRange {
@@ -544,7 +549,7 @@ pub enum AccRange {
 
 impl AccRange {
     pub fn from_reg(reg: u8) -> AccRange {
-        match reg {
+        match reg & AccRangeMask::ACC_RANGE {
             0x00 => AccRange::Range2g,
             0x01 => AccRange::Range4g,
             0x02 => AccRange::Range8g,
