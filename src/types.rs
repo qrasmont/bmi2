@@ -1693,7 +1693,7 @@ impl NvConfMask {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum TimePedriod {
+pub enum TimePeriod {
     /// A 1.25ms period.
     Short1_25Ms = 0x00,
     /// A 40ms period.
@@ -1707,7 +1707,7 @@ pub struct NvConf {
     /// Enable SPI as the primary interface instead of I2C.
     pub spi_en: bool,
     /// Timer period for the I2C watchdog.
-    pub i2c_wdt_sel: TimePedriod,
+    pub i2c_wdt_sel: TimePeriod,
     /// I2C watchdog fo the SDA pin.
     pub i2c_wdt_en: bool,
     /// Add the offset defined in the off_acc_[xyz] registers to filtered and unfiltered
@@ -1720,8 +1720,8 @@ impl NvConf {
         NvConf {
             spi_en: (reg & NvConfMask::SPI_EN) != 0,
             i2c_wdt_sel: match (reg & NvConfMask::I2C_WDT_SEL) >> 1 {
-                0x00 => TimePedriod::Short1_25Ms,
-                0x01 => TimePedriod::Long40Ms,
+                0x00 => TimePeriod::Short1_25Ms,
+                0x01 => TimePeriod::Long40Ms,
                 _ => panic!(), // TODO
             },
             i2c_wdt_en: (reg & NvConfMask::I2C_WDT_EN) != 0,
