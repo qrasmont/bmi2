@@ -141,7 +141,7 @@ where
     pub async fn get_event(&mut self) -> Result<Event, Error<CommE>> {
         let event = self.iface.read_reg(Registers::EVENT).await?;
 
-        Ok(Event::from_reg(event))
+        Ok(Event::from_reg(event)?)
     }
 
     /// Get the interrupt/feature status.
@@ -168,14 +168,14 @@ where
     ) -> Result<WristGestureActivity, Error<CommE>> {
         let wr_gest_acc = self.iface.read_reg(Registers::WR_GEST_ACT).await?;
 
-        Ok(WristGestureActivity::from_reg(wr_gest_acc))
+        Ok(WristGestureActivity::from_reg(wr_gest_acc)?)
     }
 
     /// Get the sensor internal status.
     pub async fn get_internal_status(&mut self) -> Result<InternalStatus, Error<CommE>> {
         let internal_status = self.iface.read_reg(Registers::INTERNAL_STATUS).await?;
 
-        Ok(InternalStatus::from_reg(internal_status))
+        Ok(InternalStatus::from_reg(internal_status)?)
     }
 
     /// Get the sensor temperature.
@@ -207,7 +207,7 @@ where
     /// Get the accelerometer configuration.
     pub async fn get_acc_conf(&mut self) -> Result<AccConf, Error<CommE>> {
         let acc_conf = self.iface.read_reg(Registers::ACC_CONF).await?;
-        Ok(AccConf::from_reg(acc_conf))
+        Ok(AccConf::from_reg(acc_conf)?)
     }
 
     /// Set the accelerometer configuration.
@@ -220,7 +220,7 @@ where
     /// Get the accelerometer range.
     pub async fn get_acc_range(&mut self) -> Result<AccRange, Error<CommE>> {
         let acc_range = self.iface.read_reg(Registers::ACC_RANGE).await?;
-        Ok(AccRange::from_reg(acc_range))
+        Ok(AccRange::from_reg(acc_range)?)
     }
 
     /// Set the accelerometer range.
@@ -234,7 +234,7 @@ where
     /// Get the gyroscope configuration.
     pub async fn get_gyr_conf(&mut self) -> Result<GyrConf, Error<CommE>> {
         let gyr_conf = self.iface.read_reg(Registers::GYR_CONF).await?;
-        Ok(GyrConf::from_reg(gyr_conf))
+        Ok(GyrConf::from_reg(gyr_conf)?)
     }
 
     /// Set the gyroscope configuration.
@@ -247,7 +247,7 @@ where
     /// Get the gyroscope range.
     pub async fn get_gyr_range(&mut self) -> Result<GyrRange, Error<CommE>> {
         let gyr_range = self.iface.read_reg(Registers::GYR_RANGE).await?;
-        Ok(GyrRange::from_reg(gyr_range))
+        Ok(GyrRange::from_reg(gyr_range)?)
     }
 
     /// Set the gyroscope configuration.
@@ -260,7 +260,7 @@ where
     /// Get the Auxiliary device configuration.
     pub async fn get_aux_conf(&mut self) -> Result<AuxConf, Error<CommE>> {
         let aux_conf = self.iface.read_reg(Registers::AUX_CONF).await?;
-        Ok(AuxConf::from_reg(aux_conf))
+        Ok(AuxConf::from_reg(aux_conf)?)
     }
 
     /// Set the Auxiliary device configuration.
@@ -273,7 +273,7 @@ where
     /// Get the fifo downsampling configuration.
     pub async fn get_fifo_downs(&mut self) -> Result<FifoDowns, Error<CommE>> {
         let fifo_downs = self.iface.read_reg(Registers::FIFO_DOWNS).await?;
-        Ok(FifoDowns::from_reg(fifo_downs))
+        Ok(FifoDowns::from_reg(fifo_downs)?)
     }
 
     /// Set the fifo downsampling configuration.
@@ -303,7 +303,7 @@ where
     pub async fn get_fifo_conf(&mut self) -> Result<FifoConf, Error<CommE>> {
         let mut payload = [Registers::FIFO_CONFIG_0, 0, 0];
         self.iface.read(&mut payload).await?;
-        Ok(FifoConf::from_regs(payload[1], payload[2]))
+        Ok(FifoConf::from_regs(payload[1], payload[2])?)
     }
 
     /// Set the fifo configuration.
@@ -336,7 +336,7 @@ where
     /// Get auxiliary device interface configuration.
     pub async fn get_aux_if_conf(&mut self) -> Result<AuxIfConf, Error<CommE>> {
         let aux_if_conf = self.iface.read_reg(Registers::AUX_IF_CONF).await?;
-        Ok(AuxIfConf::from_reg(aux_if_conf))
+        Ok(AuxIfConf::from_reg(aux_if_conf)?)
     }
 
     /// Set auxiliary device interface configuration.
@@ -404,7 +404,7 @@ where
     /// Get interrupt 1 io control.
     pub async fn get_int1_io_ctrl(&mut self) -> Result<IntIoCtrl, Error<CommE>> {
         let int1_io_ctrl = self.iface.read_reg(Registers::INT1_IO_CTRL).await?;
-        Ok(IntIoCtrl::from_reg(int1_io_ctrl))
+        Ok(IntIoCtrl::from_reg(int1_io_ctrl)?)
     }
 
     /// Set interrupt 1 io control.
@@ -417,7 +417,7 @@ where
     /// Get interrupt 2 io control.
     pub async fn get_int2_io_ctrl(&mut self) -> Result<IntIoCtrl, Error<CommE>> {
         let int2_io_ctrl = self.iface.read_reg(Registers::INT2_IO_CTRL).await?;
-        Ok(IntIoCtrl::from_reg(int2_io_ctrl))
+        Ok(IntIoCtrl::from_reg(int2_io_ctrl)?)
     }
 
     /// Set interrupt 2 io control.
@@ -430,7 +430,7 @@ where
     /// Get interrupt latched mode.
     pub async fn get_int_latch(&mut self) -> Result<IntLatch, Error<CommE>> {
         let int_latch = self.iface.read_reg(Registers::INT_LATCH).await?;
-        Ok(IntLatch::from_reg(int_latch))
+        Ok(IntLatch::from_reg(int_latch)?)
     }
 
     /// Set interrupt latched mode.
@@ -539,7 +539,7 @@ where
     /// Get ASDA pull up.
     pub async fn get_asda_pullup(&mut self) -> Result<PullUpConf, Error<CommE>> {
         let aux_if_trim = self.iface.read_reg(Registers::AUX_IF_TRIM).await?;
-        Ok(PullUpConf::from_reg(aux_if_trim))
+        Ok(PullUpConf::from_reg(aux_if_trim)?)
     }
 
     /// Set ASDA pull up.
@@ -553,7 +553,7 @@ where
     /// Get gyroscope component retrimming register.
     pub async fn get_gyr_crt_conf(&mut self) -> Result<GyrCrtConf, Error<CommE>> {
         let gyr_crt_conf = self.iface.read_reg(Registers::GYR_CRT_CONF).await?;
-        Ok(GyrCrtConf::from_reg(gyr_crt_conf))
+        Ok(GyrCrtConf::from_reg(gyr_crt_conf)?)
     }
 
     /// Set gyroscope component retrimming register.
@@ -583,7 +583,7 @@ where
     /// Get the interface configuration.
     pub async fn get_if_conf(&mut self) -> Result<IfConf, Error<CommE>> {
         let if_conf = self.iface.read_reg(Registers::IF_CONF).await?;
-        Ok(IfConf::from_reg(if_conf))
+        Ok(IfConf::from_reg(if_conf)?)
     }
 
     /// Set the interface configuration.
@@ -597,7 +597,7 @@ where
     /// Get the drive strength configuration.
     pub async fn get_drv(&mut self) -> Result<Drv, Error<CommE>> {
         let drv = self.iface.read_reg(Registers::DRV).await?;
-        Ok(Drv::from_reg(drv))
+        Ok(Drv::from_reg(drv)?)
     }
 
     /// Set the drive strength configuration.
@@ -609,7 +609,7 @@ where
     /// Get the accelerometer self test configuration.
     pub async fn get_acc_self_test(&mut self) -> Result<AccSelfTest, Error<CommE>> {
         let acc_self_test = self.iface.read_reg(Registers::ACC_SELF_TEST).await?;
-        Ok(AccSelfTest::from_reg(acc_self_test))
+        Ok(AccSelfTest::from_reg(acc_self_test)?)
     }
 
     /// Set the accelerometer self test configuration.
@@ -632,7 +632,7 @@ where
     /// Get NV configuration.
     pub async fn get_nv_conf(&mut self) -> Result<NvConf, Error<CommE>> {
         let nv_conf = self.iface.read_reg(Registers::NV_CONF).await?;
-        Ok(NvConf::from_reg(nv_conf))
+        Ok(NvConf::from_reg(nv_conf)?)
     }
 
     /// Set NV configuration.

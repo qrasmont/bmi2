@@ -1,6 +1,17 @@
+use crate::registers::Registers;
+
 pub const BMI160_CHIP_ID: u8 = 0xD1;
 pub const BMI260_CHIP_ID: u8 = 0x27;
 pub const BMI270_CHIP_ID: u8 = 0x24;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct InvalidReg {
+    /// The register address being parsed.
+    pub reg: u8,
+    /// The unexpected value.
+    pub value: u8,
+}
 
 /// The possible errors that could be encountered.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -16,6 +27,14 @@ pub enum Error<CommE> {
     BufferTooSmall,
     /// Initialization Failed.
     InitFailed,
+    /// Invalid register setting.
+    InvalidReg(InvalidReg),
+}
+
+impl<CommE> From<InvalidReg> for Error<CommE> {
+    fn from(e: InvalidReg) -> Self {
+        Error::InvalidReg(e)
+    }
 }
 
 /// Data burst.
@@ -205,17 +224,22 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn from_reg(reg: u8) -> Event {
-        Event {
+    pub fn from_reg(reg: u8) -> Result<Event, InvalidReg> {
+        Ok(Event {
             por_detected: (reg & EventMask::POR_DETECTED) != 0,
             persistent_err: match (reg & EventMask::ERR_CODE) >> 2 {
                 0x00 => PersistentErrors::NoErr,
                 0x01 => PersistentErrors::AccErr,
                 0x02 => PersistentErrors::GyrErr,
                 0x03 => PersistentErrors::AccGyrErr,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::EVENT,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 }
 
@@ -343,8 +367,8 @@ pub struct WristGestureActivity {
 }
 
 impl WristGestureActivity {
-    pub fn from_reg(reg: u8) -> WristGestureActivity {
-        WristGestureActivity {
+    pub fn from_reg(reg: u8) -> Result<WristGestureActivity, InvalidReg> {
+        Ok(WristGestureActivity {
             wrist_gesture: match reg & WristGestureActivityMask::WRIST_GESTURE {
                 0x00 => WristGesture::Unknown,
                 0x01 => WristGesture::PushArmDown,
@@ -352,16 +376,26 @@ impl WristGestureActivity {
                 0x03 => WristGesture::Shake,
                 0x04 => WristGesture::FlickIn,
                 0x05 => WristGesture::FlickOut,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::WR_GEST_ACT,
+                        value: reg,
+                    })
+                }
             },
             activity: match (reg & WristGestureActivityMask::ACTIVITY) >> 3 {
                 0x00 => Activity::Still,
                 0x01 => Activity::Walking,
                 0x02 => Activity::Running,
                 0x03 => Activity::Unknown,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::WR_GEST_ACT,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 }
 
@@ -408,8 +442,8 @@ pub struct InternalStatus {
 }
 
 impl InternalStatus {
-    pub fn from_reg(reg: u8) -> InternalStatus {
-        InternalStatus {
+    pub fn from_reg(reg: u8) -> Result<InternalStatus, InvalidReg> {
+        Ok(InternalStatus {
             message: match reg & InternalStatusMask::MESSAGE {
                 0x00 => Message::NotInit,
                 0x01 => Message::InitOk,
@@ -419,11 +453,16 @@ impl InternalStatus {
                 0x05 => Message::NvmErr,
                 0x06 => Message::StartUpErr,
                 0x07 => Message::CompatErr,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::INTERNAL_STATUS,
+                        value: reg,
+                    })
+                }
             },
             axes_remap_error: (reg & InternalStatusMask::AXES_REMAP_ERROR) != 0,
             odr_50hz_error: (reg & InternalStatusMask::ODR_50HZ_ERROR) != 0,
-        }
+        })
     }
 }
 
@@ -520,8 +559,8 @@ pub struct AccConf {
 }
 
 impl AccConf {
-    pub fn from_reg(reg: u8) -> AccConf {
-        AccConf {
+    pub fn from_reg(reg: u8) -> Result<AccConf, InvalidReg> {
+        Ok(AccConf {
             odr: match reg & AccConfMask::ACC_ODR {
                 0x01 => Odr::Odr0p78,
                 0x02 => Odr::Odr1p5,
@@ -538,7 +577,12 @@ impl AccConf {
                 0x0D => Odr::Odr3k2,
                 0x0E => Odr::Odr6k4,
                 0x0F => Odr::Odr12k8,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::ACC_CONF,
+                        value: reg,
+                    })
+                }
             },
             bwp: match (reg & AccConfMask::ACC_BWP) >> 4 {
                 0x00 => AccBwp::Osr4Avg1,
@@ -549,14 +593,24 @@ impl AccConf {
                 0x05 => AccBwp::ResAvg32,
                 0x06 => AccBwp::ResAvg64,
                 0x07 => AccBwp::ResAvg128,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::ACC_CONF,
+                        value: reg,
+                    })
+                }
             },
             filter_perf: match (reg & AccConfMask::ACC_FILTER_PERF) >> 7 {
                 0x00 => PerfMode::Power,
                 0x01 => PerfMode::Perf,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::ACC_CONF,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -588,15 +642,26 @@ pub enum AccRange {
     Range16g = 0x03,
 }
 
-impl AccRange {
-    pub fn from_reg(reg: u8) -> AccRange {
-        match reg & AccRangeMask::ACC_RANGE {
-            0x00 => AccRange::Range2g,
-            0x01 => AccRange::Range4g,
-            0x02 => AccRange::Range8g,
-            0x03 => AccRange::Range16g,
-            _ => panic!(), // TODO
+impl TryFrom<u8> for AccRange {
+    type Error = InvalidReg;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(AccRange::Range2g),
+            0x01 => Ok(AccRange::Range4g),
+            0x02 => Ok(AccRange::Range8g),
+            0x03 => Ok(AccRange::Range16g),
+            _ => Err(InvalidReg {
+                reg: Registers::ACC_RANGE,
+                value,
+            }),
         }
+    }
+}
+
+impl AccRange {
+    pub fn from_reg(reg: u8) -> Result<AccRange, InvalidReg> {
+        AccRange::try_from(reg & AccRangeMask::ACC_RANGE)
     }
 }
 
@@ -638,8 +703,8 @@ pub struct GyrConf {
 }
 
 impl GyrConf {
-    pub fn from_reg(reg: u8) -> GyrConf {
-        GyrConf {
+    pub fn from_reg(reg: u8) -> Result<GyrConf, InvalidReg> {
+        Ok(GyrConf {
             odr: match reg & GyrConfMask::GYR_ODR {
                 0x01 => Odr::Odr0p78,
                 0x02 => Odr::Odr1p5,
@@ -656,26 +721,46 @@ impl GyrConf {
                 0x0D => Odr::Odr3k2,
                 0x0E => Odr::Odr6k4,
                 0x0F => Odr::Odr12k8,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_CONF,
+                        value: reg,
+                    })
+                }
             },
             bwp: match (reg & GyrConfMask::GYR_BWP) >> 4 {
                 0x00 => GyrBwp::Osr4,
                 0x01 => GyrBwp::Osr2,
                 0x02 => GyrBwp::Norm,
                 0x03 => GyrBwp::Res,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_CONF,
+                        value: reg,
+                    })
+                }
             },
             noise_perf: match (reg & GyrConfMask::GYR_NOISE_PERF) >> 6 {
                 0x00 => PerfMode::Power,
                 0x01 => PerfMode::Perf,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_CONF,
+                        value: reg,
+                    })
+                }
             },
             filter_perf: match (reg & GyrConfMask::GYR_FILTER_PERF) >> 7 {
                 0x00 => PerfMode::Power,
                 0x01 => PerfMode::Perf,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_CONF,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -721,22 +806,32 @@ pub struct GyrRange {
 }
 
 impl GyrRange {
-    pub fn from_reg(reg: u8) -> GyrRange {
-        GyrRange {
+    pub fn from_reg(reg: u8) -> Result<GyrRange, InvalidReg> {
+        Ok(GyrRange {
             range: match reg & GyrRangeMask::GYR_RANGE {
                 0x00 => GyrRangeVal::Range2000,
                 0x01 => GyrRangeVal::Range1000,
                 0x02 => GyrRangeVal::Range500,
                 0x03 => GyrRangeVal::Range250,
                 0x04 => GyrRangeVal::Range125,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_RANGE,
+                        value: reg,
+                    })
+                }
             },
             ois_range: match (reg & GyrRangeMask::OIS_RANGE) >> 3 {
                 0x00 => OisRange::Range250,
                 0x01 => OisRange::Range2000,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_RANGE,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -764,8 +859,8 @@ pub struct AuxConf {
 }
 
 impl AuxConf {
-    pub fn from_reg(reg: u8) -> AuxConf {
-        AuxConf {
+    pub fn from_reg(reg: u8) -> Result<AuxConf, InvalidReg> {
+        Ok(AuxConf {
             odr: match reg & AuxConfMask::AUX_ODR {
                 0x01 => Odr::Odr0p78,
                 0x02 => Odr::Odr1p5,
@@ -782,10 +877,15 @@ impl AuxConf {
                 0x0D => Odr::Odr3k2,
                 0x0E => Odr::Odr6k4,
                 0x0F => Odr::Odr12k8,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::AUX_CONF,
+                        value: reg,
+                    })
+                }
             },
             offset: (reg & AuxConfMask::AUX_OFFSET) >> 4,
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -828,21 +928,31 @@ pub struct FifoDowns {
 }
 
 impl FifoDowns {
-    pub fn from_reg(reg: u8) -> FifoDowns {
-        FifoDowns {
+    pub fn from_reg(reg: u8) -> Result<FifoDowns, InvalidReg> {
+        Ok(FifoDowns {
             gyr_downs: reg & FifoDownsMask::GYR_FIFO_DOWNS,
             gyr_filt_data: match (reg & FifoDownsMask::GYR_FIFO_FILT_DATA) >> 3 {
                 0x00 => FilterData::Unfiltered,
                 0x01 => FilterData::Filtered,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::FIFO_DOWNS,
+                        value: reg,
+                    })
+                }
             },
             acc_downs: (reg & FifoDownsMask::ACC_FIFO_DOWNS) >> 4,
             acc_filt_data: match (reg & FifoDownsMask::ACC_FIFO_FILT_DATA) >> 7 {
                 0x00 => FilterData::Unfiltered,
                 0x01 => FilterData::Filtered,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::FIFO_DOWNS,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -905,8 +1015,8 @@ pub struct FifoConf {
 }
 
 impl FifoConf {
-    pub fn from_regs(reg_0: u8, reg_1: u8) -> FifoConf {
-        FifoConf {
+    pub fn from_regs(reg_0: u8, reg_1: u8) -> Result<FifoConf, InvalidReg> {
+        Ok(FifoConf {
             stop_on_full: (reg_0 & FifoConfig0Mask::STOP_ON_FULL) != 0,
             time_enable: (reg_0 & FifoConfig0Mask::TIME_EN) != 0,
             tag_int1_en: match reg_1 & FifoConfig1Mask::TAG_INT1_EN {
@@ -914,20 +1024,30 @@ impl FifoConf {
                 0x01 => FifoTagIntEnable::IntLevel,
                 0x02 => FifoTagIntEnable::AccSat,
                 0x03 => FifoTagIntEnable::GyrSat,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::FIFO_CONFIG_0,
+                        value: reg_0,
+                    })
+                }
             },
             tag_int2_en: match (reg_1 & FifoConfig1Mask::TAG_INT2_EN) >> 2 {
                 0x00 => FifoTagIntEnable::IntEdge,
                 0x01 => FifoTagIntEnable::IntLevel,
                 0x02 => FifoTagIntEnable::AccSat,
                 0x03 => FifoTagIntEnable::GyrSat,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::FIFO_CONFIG_0,
+                        value: reg_1,
+                    })
+                }
             },
             header_enable: (reg_1 & FifoConfig1Mask::HEADER_EN) >> 4 != 0,
             aux_enable: (reg_1 & FifoConfig1Mask::AUX_EN) >> 5 != 0,
             acc_enable: (reg_1 & FifoConfig1Mask::ACC_EN) >> 6 != 0,
             gyr_enable: (reg_1 & FifoConfig1Mask::GYR_EN) >> 7 != 0,
-        }
+        })
     }
 
     pub fn to_regs(self) -> (u8, u8) {
@@ -1032,25 +1152,35 @@ pub struct AuxIfConf {
 }
 
 impl AuxIfConf {
-    pub fn from_reg(reg: u8) -> AuxIfConf {
-        AuxIfConf {
+    pub fn from_reg(reg: u8) -> Result<AuxIfConf, InvalidReg> {
+        Ok(AuxIfConf {
             aux_read_burst: match reg & AuxIfConfMask::AUX_RD_BURST {
                 0x00 => ReadBurst::Burst1Byte,
                 0x01 => ReadBurst::Burst2Byte,
                 0x02 => ReadBurst::Burst4Byte,
                 0x03 => ReadBurst::Burst8Byte,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::AUX_IF_CONF,
+                        value: reg,
+                    })
+                }
             },
             man_read_burst: match (reg & AuxIfConfMask::MAN_RD_BURST) >> 2 {
                 0x00 => ReadBurst::Burst1Byte,
                 0x01 => ReadBurst::Burst2Byte,
                 0x02 => ReadBurst::Burst4Byte,
                 0x03 => ReadBurst::Burst8Byte,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::AUX_IF_CONF,
+                        value: reg,
+                    })
+                }
             },
             aux_fcu_write_en: (reg & AuxIfConfMask::AUX_FCU_WRITE_EN) >> 6 != 0,
             aux_manual_en: (reg & AuxIfConfMask::AUX_MANUAL_EN) >> 7 != 0,
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1138,21 +1268,31 @@ pub struct IntIoCtrl {
 }
 
 impl IntIoCtrl {
-    pub fn from_reg(reg: u8) -> IntIoCtrl {
-        IntIoCtrl {
+    pub fn from_reg(reg: u8) -> Result<IntIoCtrl, InvalidReg> {
+        Ok(IntIoCtrl {
             level: match (reg & IntIoCtrlMask::LEVEL) >> 1 {
                 0x00 => OutputLevel::ActiveLow,
                 0x01 => OutputLevel::ActiveHigh,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::INT1_IO_CTRL,
+                        value: reg,
+                    })
+                }
             },
             od: match (reg & IntIoCtrlMask::OD) >> 2 {
                 0x00 => OutputBehavior::PushPull,
                 0x01 => OutputBehavior::OpenDrain,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::INT1_IO_CTRL,
+                        value: reg,
+                    })
+                }
             },
             output_en: (reg & IntIoCtrlMask::OUTPUT_EN) != 0,
             input_en: (reg & IntIoCtrlMask::INPUT_EN) != 0,
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1181,13 +1321,24 @@ pub enum IntLatch {
     Permanent = 0x01,
 }
 
-impl IntLatch {
-    pub fn from_reg(reg: u8) -> IntLatch {
-        match reg & IntLatchMask::LATCH {
-            0x00 => IntLatch::None,
-            0x01 => IntLatch::Permanent,
-            _ => panic!(), // TODO
+impl TryFrom<u8> for IntLatch {
+    type Error = InvalidReg;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(IntLatch::None),
+            0x01 => Ok(IntLatch::Permanent),
+            _ => Err(InvalidReg {
+                reg: Registers::INT_LATCH,
+                value,
+            }),
         }
+    }
+}
+
+impl IntLatch {
+    pub fn from_reg(reg: u8) -> Result<IntLatch, InvalidReg> {
+        IntLatch::try_from(reg & IntLatchMask::LATCH)
     }
 }
 
@@ -1383,15 +1534,26 @@ pub enum PullUpConf {
     PullUp2K = 0x03,
 }
 
-impl PullUpConf {
-    pub fn from_reg(reg: u8) -> PullUpConf {
-        match reg & AuxIfTrimMask::PUPSEL {
-            0x00 => PullUpConf::PullUpOff,
-            0x01 => PullUpConf::PullUp40K,
-            0x02 => PullUpConf::PullUp10K,
-            0x03 => PullUpConf::PullUp2K,
-            _ => panic!(), // TODO
+impl TryFrom<u8> for PullUpConf {
+    type Error = InvalidReg;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(PullUpConf::PullUpOff),
+            0x01 => Ok(PullUpConf::PullUp40K),
+            0x02 => Ok(PullUpConf::PullUp10K),
+            0x03 => Ok(PullUpConf::PullUp2K),
+            _ => Err(InvalidReg {
+                reg: Registers::AUX_IF_TRIM,
+                value,
+            }),
         }
+    }
+}
+
+impl PullUpConf {
+    pub fn from_reg(reg: u8) -> Result<PullUpConf, InvalidReg> {
+        PullUpConf::try_from(reg & AuxIfTrimMask::PUPSEL)
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1425,15 +1587,20 @@ pub struct GyrCrtConf {
 }
 
 impl GyrCrtConf {
-    pub fn from_reg(reg: u8) -> GyrCrtConf {
-        GyrCrtConf {
+    pub fn from_reg(reg: u8) -> Result<GyrCrtConf, InvalidReg> {
+        Ok(GyrCrtConf {
             crt_running: (reg & GyrCrtConfMask::CRT_RUNNING) >> 2 != 0,
             rdy_for_dl: match (reg & GyrCrtConfMask::RDY_FOR_DL) >> 3 {
                 0x00 => ReadyForDl::OnGoing,
                 0x01 => ReadyForDl::Complete,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::GYR_CRT_CONF,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1477,21 +1644,31 @@ pub struct IfConf {
 }
 
 impl IfConf {
-    pub fn from_reg(reg: u8) -> IfConf {
-        IfConf {
+    pub fn from_reg(reg: u8) -> Result<IfConf, InvalidReg> {
+        Ok(IfConf {
             spi_mode: match reg & IfConfMask::SPI3 {
                 0x00 => SpiMode::Spi4,
                 0x01 => SpiMode::Spi3,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::IF_CONF,
+                        value: reg,
+                    })
+                }
             },
             spi_mode_ois: match (reg & IfConfMask::SPI3_OIS) >> 1 {
                 0x00 => SpiMode::Spi4,
                 0x01 => SpiMode::Spi3,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::IF_CONF,
+                        value: reg,
+                    })
+                }
             },
             ois_en: (reg & IfConfMask::OIS_EN) >> 4 != 0,
             aux_en: (reg & IfConfMask::AUX_EN) >> 5 != 0,
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1542,8 +1719,8 @@ pub struct Drv {
 }
 
 impl Drv {
-    pub fn from_reg(reg: u8) -> Drv {
-        Drv {
+    pub fn from_reg(reg: u8) -> Result<Drv, InvalidReg> {
+        Ok(Drv {
             io_pad_drv1: match reg & DrvMask::IO_PAD_DRV1 {
                 0b000 => DriveStrength::L0,
                 0b001 => DriveStrength::L1,
@@ -1553,7 +1730,12 @@ impl Drv {
                 0b101 => DriveStrength::L5,
                 0b110 => DriveStrength::L6,
                 0b111 => DriveStrength::L7,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::DRV,
+                        value: reg,
+                    })
+                }
             },
             io_pad_i2c_b1: (reg & DrvMask::IO_PAD_I2C_B1) >> 3 != 0,
             io_pad_drv2: match (reg & DrvMask::IO_PAD_DRV2) >> 4 {
@@ -1565,10 +1747,15 @@ impl Drv {
                 0b101 => DriveStrength::L5,
                 0b110 => DriveStrength::L6,
                 0b111 => DriveStrength::L7,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::DRV,
+                        value: reg,
+                    })
+                }
             },
             io_pad_i2c_b2: (reg & DrvMask::IO_PAD_I2C_B2) >> 7 != 0,
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1623,20 +1810,30 @@ pub struct AccSelfTest {
 }
 
 impl AccSelfTest {
-    pub fn from_reg(reg: u8) -> AccSelfTest {
-        AccSelfTest {
+    pub fn from_reg(reg: u8) -> Result<AccSelfTest, InvalidReg> {
+        Ok(AccSelfTest {
             enable: (reg & AccSelfTestMask::ACC_SELF_TEST_EN) != 0,
             sign: match (reg & AccSelfTestMask::ACC_SELF_TEST_SIGN) >> 2 {
                 0x00 => Sign::Negative,
                 0x01 => Sign::Positive,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::ACC_SELF_TEST,
+                        value: reg,
+                    })
+                }
             },
             amplitude: match (reg & AccSelfTestMask::ACC_SELF_TEST_AMP) >> 3 {
                 0x00 => Amplitude::Low,
                 0x01 => Amplitude::High,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::ACC_SELF_TEST,
+                        value: reg,
+                    })
+                }
             },
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
@@ -1716,17 +1913,22 @@ pub struct NvConf {
 }
 
 impl NvConf {
-    pub fn from_reg(reg: u8) -> NvConf {
-        NvConf {
+    pub fn from_reg(reg: u8) -> Result<NvConf, InvalidReg> {
+        Ok(NvConf {
             spi_en: (reg & NvConfMask::SPI_EN) != 0,
             i2c_wdt_sel: match (reg & NvConfMask::I2C_WDT_SEL) >> 1 {
                 0x00 => TimePeriod::Short1_25Ms,
                 0x01 => TimePeriod::Long40Ms,
-                _ => panic!(), // TODO
+                _ => {
+                    return Err(InvalidReg {
+                        reg: Registers::NV_CONF,
+                        value: reg,
+                    })
+                }
             },
             i2c_wdt_en: (reg & NvConfMask::I2C_WDT_EN) != 0,
             acc_off_en: (reg & NvConfMask::ACC_OFF_EN) != 0,
-        }
+        })
     }
 
     pub fn to_reg(self) -> u8 {
