@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate fixedvec;
 
-mod registers;
 pub mod config;
+mod registers;
 
 pub mod interface;
 pub use interface::I2cAddr;
