@@ -1,5 +1,3 @@
-use fixedvec::FixedVec;
-
 #[cfg(feature = "blocking")]
 use embedded_hal::delay::DelayNs;
 #[cfg(feature = "async")]
@@ -780,13 +778,12 @@ where
             return Err(Error::<CommE>::BufferTooSmall);
         }
 
-        let mut preallocated_space = alloc_stack!([u8; N]);
-        let mut vec = FixedVec::new(&mut preallocated_space);
+        let mut buf = [0u8; N];
 
         // Offset and burst calculation
         let mut offset = 0u16;
         let max_len = config_file.len() as u16;
-        let burst = if self.max_burst % 2 == 0 {
+        let burst = if (self.max_burst - 1) % 2 == 0 {
             self.max_burst - 1 // Address byte + even number of data bytes
         } else {
             self.max_burst - 2 // Make sure we have even data bytes
@@ -800,28 +797,21 @@ where
             // INIT_ADDR should point to 16-bit words
             self.set_init_addr(offset / 2).await?; // needs to be divided by 2 because offset is in bytes
 
-            // Ensure we're writing complete 16-bit words
-            let mut chunk_size = burst;
-            if (chunk_size % 2) != 0 {
-                // If burst size would result in odd number of bytes, reduce by 1
-                chunk_size -= 1;
-            }
-
-            let end = if (offset + chunk_size) > max_len {
-                // For the last chunk, ensure we still write complete 16-bit words
-                let remaining = max_len - offset;
-                offset + (remaining - (remaining % 2))
+            let remaining = max_len - offset;
+            let chunk_size = if burst < remaining {
+                burst
             } else {
-                offset + chunk_size
+                // Last chunk: round down to even number of bytes
+                remaining - (remaining % 2)
             };
 
-            vec.clear();
-            vec.push(Registers::INIT_DATA).map_err(|_| Error::Alloc)?;
+            buf[0] = Registers::INIT_DATA;
+            buf[1..1 + chunk_size as usize]
+                .copy_from_slice(&config_file[offset as usize..(offset + chunk_size) as usize]);
 
-            vec.push_all(&config_file[offset as usize..end as usize])
-                .map_err(|_| Error::Alloc)?;
-
-            self.iface.write(vec.as_mut_slice()).await?;
+            self.iface
+                .write(&mut buf[..1 + chunk_size as usize])
+                .await?;
 
             offset += chunk_size;
             self.delay.delay_us(2).await;
