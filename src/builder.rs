@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use crate::bmi2::Bmi2;
 use crate::interface::{I2cAddr, I2cInterface, SpiInterface};
 use crate::interface::{ReadData, WriteData};
@@ -8,16 +10,24 @@ use embedded_hal::delay::DelayNs;
 #[cfg(feature = "async")]
 use embedded_hal_async::delay::DelayNs;
 
-pub struct Builder<'a, I, D> {
+/// Builder state to allow to enfore using some of the fields
+pub mod builder_state {
+    pub struct Unset;
+    pub struct Set;
+}
+
+pub struct Builder<'a, I, D, P = builder_state::Unset, C = builder_state::Unset> {
     iface: I,
     delay: D,
     max_burst: u16,
-    config_file: Option<&'a [u8]>,
+    config: Option<&'a [u8]>,
     pwr_ctrl: Option<PwrCtrl>,
     acc_conf: Option<AccConf>,
     acc_range: Option<AccRange>,
     gyr_conf: Option<GyrConf>,
     gyr_range: Option<GyrRange>,
+    _pwr: PhantomData<P>,
+    _cfg: PhantomData<C>,
 }
 
 impl<'a, I2C, D> Builder<'a, I2cInterface<I2C>, D> {
@@ -29,12 +39,14 @@ impl<'a, I2C, D> Builder<'a, I2cInterface<I2C>, D> {
             },
             delay,
             max_burst: burst.val(),
-            config_file: None,
+            config: None,
             pwr_ctrl: None,
             acc_conf: None,
             acc_range: None,
             gyr_conf: None,
             gyr_range: None,
+            _pwr: PhantomData,
+            _cfg: PhantomData,
         }
     }
 }
@@ -45,27 +57,19 @@ impl<'a, SPI, D> Builder<'a, SpiInterface<SPI>, D> {
             iface: SpiInterface { spi },
             delay,
             max_burst: burst.val(),
-            config_file: None,
+            config: None,
             pwr_ctrl: None,
             acc_conf: None,
             acc_range: None,
             gyr_conf: None,
             gyr_range: None,
+            _pwr: PhantomData,
+            _cfg: PhantomData,
         }
     }
 }
 
-impl<'a, I, D> Builder<'a, I, D> {
-    pub fn config(mut self, config: &'a [u8]) -> Self {
-        self.config_file = Some(config);
-        self
-    }
-
-    pub fn pwr_ctrl(mut self, pwr_ctrl: PwrCtrl) -> Self {
-        self.pwr_ctrl = Some(pwr_ctrl);
-        self
-    }
-
+impl<'a, I, D, P, C> Builder<'a, I, D, P, C> {
     pub fn acc_conf(mut self, acc_conf: AccConf) -> Self {
         self.acc_conf = Some(acc_conf);
         self
@@ -87,18 +91,54 @@ impl<'a, I, D> Builder<'a, I, D> {
     }
 }
 
+impl<'a, I, D, P> Builder<'a, I, D, P, builder_state::Unset> {
+    pub fn config(self, config: &'a [u8]) -> Builder<'a, I, D, P, builder_state::Set> {
+        Builder {
+            iface: self.iface,
+            delay: self.delay,
+            max_burst: self.max_burst,
+            config: Some(config),
+            pwr_ctrl: self.pwr_ctrl,
+            acc_conf: self.acc_conf,
+            acc_range: self.acc_range,
+            gyr_conf: self.gyr_conf,
+            gyr_range: self.gyr_range,
+            _pwr: PhantomData,
+            _cfg: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, D, C> Builder<'a, I, D, builder_state::Unset, C> {
+    pub fn pwr_ctrl(self, pwr_ctrl: PwrCtrl) -> Builder<'a, I, D, builder_state::Set, C> {
+        Builder {
+            iface: self.iface,
+            delay: self.delay,
+            max_burst: self.max_burst,
+            config: self.config,
+            pwr_ctrl: Some(pwr_ctrl),
+            acc_conf: self.acc_conf,
+            acc_range: self.acc_range,
+            gyr_conf: self.gyr_conf,
+            gyr_range: self.gyr_range,
+            _pwr: PhantomData,
+            _cfg: PhantomData,
+        }
+    }
+}
+
 #[maybe_async::maybe_async(AFIT)]
-impl<'a, I, D, CommE> Builder<'a, I, D>
+impl<'a, I, D, CommE> Builder<'a, I, D, builder_state::Set, builder_state::Set>
 where
     I: ReadData<Error = Error<CommE>> + WriteData<Error = Error<CommE>>,
     D: DelayNs,
 {
     pub async fn init(self, buf: &mut [u8]) -> Result<Bmi2<I, D>, Error<CommE>> {
-        let config_file = self.config_file.ok_or(Error::MissingConfig)?;
-
         let mut bmi = Bmi2::from_parts(self.iface, self.delay, self.max_burst);
 
-        bmi.init(config_file, buf).await?;
+        if let Some(config_file) = self.config {
+            bmi.init(config_file, buf).await?
+        }
 
         if let Some(acc_conf) = self.acc_conf {
             bmi.set_acc_conf(acc_conf).await?
