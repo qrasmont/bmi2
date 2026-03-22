@@ -29,17 +29,18 @@ use embedded_hal::delay::DelayNs;
 // Specify your delay type, for example:
 let delay = MyDelay::new(); // Replace with your actual delay implementation
 
-// Choose a buffer size (e.g., 512 bytes), needs to be >= max data burst
-const BUFFER_SIZE: usize = 512;
+/// Decalre a buffer for the config upload in the init phase (e.g., 512 bytes),
+/// needs to be >= max data burst
+let mut config_buf = [0u8; 512];
 
 /// Create a new Bmi2 device using I2C with its alternative address (0x69).
 /// Configure the max data burst to 255 bytes:
 /// - used for the upload of the configuration during initialization.
 /// - This is a limitation from your device or its HAL.
-let mut bmi = Bmi2::<_, _, BUFFER_SIZE>::new_i2c(
-    i2c, 
+let mut bmi = Bmi2::new_i2c(
+    i2c,
     delay,
-    I2cAddr::Alternative, 
+    I2cAddr::Alternative,
     Burst::new(255),
 );
 
@@ -49,7 +50,7 @@ let chip_id = bmi.get_chip_id().unwrap();
 /// During this process a configuration of > 8kB is uploaded to the sensor.
 /// Alternatively, for the BMI260 call its dedicated config:
 /// bmi.init(&config::BMI260_CONFIG_FILE).unwrap();
-bmi.init(&config::BMI270_CONFIG_FILE).unwrap();
+bmi.init(&config::BMI270_CONFIG_FILE, &mut config_buf).unwrap();
 /// Enable power for the accelerometer and the gyroscope.
 let pwr_ctrl = PwrCtrl { aux_en: false, gyr_en: true, acc_en: true, temp_en: false };
 bmi.set_pwr_ctrl(pwr_ctrl).unwrap();

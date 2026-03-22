@@ -15,13 +15,13 @@ use crate::types::{
     FIFO_LENGTH_1_MASK,
 };
 
-pub struct Bmi2<I, D, const N: usize> {
+pub struct Bmi2<I, D> {
     iface: I,
     max_burst: u16,
     delay: D,
 }
 
-impl<I2C, D, const N: usize> Bmi2<I2cInterface<I2C>, D, N> {
+impl<I2C, D> Bmi2<I2cInterface<I2C>, D> {
     /// Create a new Bmi270 device with I2C communication.
     pub fn new_i2c(i2c: I2C, delay: D, address: I2cAddr, burst: Burst) -> Self {
         Bmi2 {
@@ -40,7 +40,7 @@ impl<I2C, D, const N: usize> Bmi2<I2cInterface<I2C>, D, N> {
     }
 }
 
-impl<SPI, D, const N: usize> Bmi2<SpiInterface<SPI>, D, N>
+impl<SPI, D> Bmi2<SpiInterface<SPI>, D>
 where
     D: DelayNs,
 {
@@ -60,7 +60,7 @@ where
 }
 
 #[maybe_async::maybe_async(AFIT)]
-impl<I, D, CommE, const N: usize> Bmi2<I, D, N>
+impl<I, D, CommE> Bmi2<I, D>
 where
     I: ReadData<Error = Error<CommE>> + WriteData<Error = Error<CommE>>,
     D: DelayNs,
@@ -759,7 +759,7 @@ where
     }
 
     /// Initialize sensor.
-    pub async fn init(&mut self, config_file: &[u8]) -> Result<(), Error<CommE>> {
+    pub async fn init(&mut self, config_file: &[u8], buf: &mut [u8]) -> Result<(), Error<CommE>> {
         // Verify chip ID first
         let chip_id = self.iface.read_reg(Registers::CHIP_ID).await?;
         if !(chip_id == BMI160_CHIP_ID || chip_id == BMI260_CHIP_ID || chip_id == BMI270_CHIP_ID) {
@@ -774,11 +774,9 @@ where
         self.disable_power_save().await?;
 
         // Verify buffer size
-        if self.max_burst as usize > N {
+        if self.max_burst as usize > buf.len() {
             return Err(Error::<CommE>::BufferTooSmall);
         }
-
-        let mut buf = [0u8; N];
 
         // Offset and burst calculation
         let mut offset = 0u16;

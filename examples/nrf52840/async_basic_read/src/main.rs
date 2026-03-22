@@ -31,13 +31,13 @@ async fn main(_spawner: Spawner) {
     let twi = Twim::new(p.TWISPI0, Irqs, p.P0_26, p.P0_27, config, RAM_BUFFER.take());
     let delay = Delay;
 
-    const BUFFER_SIZE: usize = 256;
-    let mut bmi = Bmi2::<_, _, BUFFER_SIZE>::new_i2c(twi, delay, I2cAddr::Alternative, Burst::new(255));
+    let mut config_buf = [0u8; 256];
+    let mut bmi = Bmi2::new_i2c(twi, delay, I2cAddr::Alternative, Burst::new(255));
 
     let chip_id = bmi.get_chip_id().await.unwrap();
     info!("chip id: {}", chip_id);
 
-    bmi.init(&config::BMI270_CONFIG_FILE).await.unwrap();
+    bmi.init(&config::BMI270_CONFIG_FILE, &mut config_buf).await.unwrap();
 
     // Enable power for the accelerometer and the gyroscope.
     let pwr_ctrl = PwrCtrl {

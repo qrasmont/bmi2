@@ -37,13 +37,12 @@ fn main() -> ! {
 
     let delay = Delay::new(core.SYST);
 
-    const BUFFER_SIZE: usize = 256;
-
-    let mut bmi = Bmi2::<_, _, BUFFER_SIZE>::new_i2c(i2c, delay, I2cAddr::Alternative, Burst::new(255));
+    let mut config_buf = [0u8; 256];
+    let mut bmi = Bmi2::new_i2c(i2c, delay, I2cAddr::Alternative, Burst::new(255));
     let chip_id = bmi.get_chip_id().unwrap();
     defmt::info!("chip id: {}", chip_id);
 
-    bmi.init(&config::BMI270_CONFIG_FILE).unwrap();
+    bmi.init(&config::BMI270_CONFIG_FILE, &mut config_buf).unwrap();
 
     // Enable power for the accelerometer and the gyroscope.
     let pwr_ctrl = PwrCtrl {
