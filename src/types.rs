@@ -29,6 +29,8 @@ pub enum Error<CommE> {
     InitFailed,
     /// Invalid register setting.
     InvalidReg(InvalidReg),
+    /// No configuration provided at init.
+    MissingConfig,
 }
 
 impl<CommE> From<InvalidReg> for Error<CommE> {

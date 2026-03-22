@@ -21,6 +21,17 @@ pub struct Bmi2<I, D> {
     delay: D,
 }
 
+impl<I, D> Bmi2<I, D> {
+    /// Internal constructor used by Builder.
+    pub(crate) fn from_parts(iface: I, delay: D, max_burst: u16) -> Self {
+        Bmi2 {
+            iface,
+            max_burst,
+            delay,
+        }
+    }
+}
+
 impl<I2C, D> Bmi2<I2cInterface<I2C>, D> {
     /// Create a new Bmi270 device with I2C communication.
     pub fn new_i2c(i2c: I2C, delay: D, address: I2cAddr, burst: Burst) -> Self {

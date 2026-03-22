@@ -58,3 +58,31 @@ bmi.set_pwr_ctrl(pwr_ctrl).unwrap();
 let data = bmi.get_data().unwrap();
 // ...
 ```
+
+Builder pattern:
+
+```rust
+// ...
+use bmi2::Builder;
+use bmi2::config;
+use bmi2::{types::Burst, I2cAddr, types::PwrCtrl};
+use embedded_hal::delay::DelayNs;
+
+let delay = MyDelay::new();
+
+let mut config_buf = [0u8; 512];
+
+let mut bmi = Builder::i2c(i2c, delay, I2cAddr::Alternative, Burst::new(255))
+    .config(&config::BMI270_CONFIG_FILE)
+    .pwr_ctrl(PwrCtrl {
+        aux_en: false,
+        gyr_en: true,
+        acc_en: true,
+        temp_en: false,
+    })
+    .init(&mut config_buf)
+    .unwrap();
+
+let data = bmi.get_data().unwrap();
+// ...
+```

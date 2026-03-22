@@ -17,7 +17,7 @@ use nrf52840_hal::{
 use defmt_rtt as _;
 
 use bmi2::config;
-use bmi2::Bmi2;
+use bmi2::Builder;
 use bmi2::{types::Burst, types::PwrCtrl, I2cAddr};
 
 #[entry]
@@ -38,20 +38,16 @@ fn main() -> ! {
     let delay = Delay::new(core.SYST);
 
     let mut config_buf = [0u8; 256];
-    let mut bmi = Bmi2::new_i2c(i2c, delay, I2cAddr::Alternative, Burst::new(255));
-    let chip_id = bmi.get_chip_id().unwrap();
-    defmt::info!("chip id: {}", chip_id);
-
-    bmi.init(&config::BMI270_CONFIG_FILE, &mut config_buf).unwrap();
-
-    // Enable power for the accelerometer and the gyroscope.
-    let pwr_ctrl = PwrCtrl {
-        aux_en: false,
-        gyr_en: true,
-        acc_en: true,
-        temp_en: false,
-    };
-    bmi.set_pwr_ctrl(pwr_ctrl).unwrap();
+    let mut bmi = Builder::i2c(i2c, delay, I2cAddr::Alternative, Burst::new(255))
+        .config(&config::BMI270_CONFIG_FILE)
+        .pwr_ctrl(PwrCtrl {
+            aux_en: false,
+            gyr_en: true,
+            acc_en: true,
+            temp_en: false,
+        })
+        .init(&mut config_buf)
+        .unwrap();
 
     loop {
         let data = bmi.get_data().unwrap();
